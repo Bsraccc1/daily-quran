@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="16dp"
+    android:background="#FFF8F5F0">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Quran Reader"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#FF1B6B45" />
+
+    <TextView
+        android:id="@+id/widget_session"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="12sp"
+        android:textColor="#FF333333"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/widget_last_page"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="14sp"
+        android:textColor="#FF333333" />
+
+    <TextView
+        android:id="@+id/widget_total_read"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="12sp"
+        android:textColor="#FF888888" />
+
+</LinearLayout>

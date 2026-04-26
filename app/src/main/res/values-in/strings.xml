@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daily Quran</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Beranda</string>
+    <string name="nav_bookmarks">Penanda</string>
+    <string name="nav_search">Cari</string>
+    <string name="nav_settings">Pengaturan</string>
+    
+    <!-- Home Screen -->
+    <string name="home_greeting">Assalamu\'alaikum</string>
+    <string name="home_continue_reading">Lanjutkan Membaca</string>
+    <string name="home_start_new_session">Mulai Sesi Baru</string>
+    <string name="home_quick_access">Akses Cepat</string>
+    <string name="home_juz">Juz</string>
+    <string name="home_surah">Surah</string>
+    <string name="home_page">Halaman</string>
+    <string name="home_bookmark">Penanda</string>
+    <string name="home_last_read">Terakhir Dibaca</string>
+    <string name="home_reading_stats">Statistik Membaca</string>
+    <string name="home_pages_read">Halaman Dibaca</string>
+    <string name="home_reading_time">Waktu Membaca</string>
+    <string name="home_minutes">menit</string>
+    
+    <!-- Reading Screen -->
+    <string name="reading_page_of">Halaman %1$d dari %2$d</string>
+    <string name="reading_add_bookmark">Tambah Penanda</string>
+    <string name="reading_remove_bookmark">Hapus Penanda</string>
+    <string name="reading_go_to_page">Ke Halaman</string>
+    <string name="reading_settings">Pengaturan Baca</string>
+    
+    <!-- Session Management -->
+    <string name="session_active">Sesi Aktif</string>
+    <string name="session_start_page">Halaman Mulai</string>
+    <string name="session_target_pages">Target Halaman</string>
+    <string name="session_progress">Progres</string>
+    <string name="session_completed">Selesai</string>
+    <string name="session_extend">Perpanjang Sesi</string>
+    <string name="session_end">Akhiri Sesi</string>
+    <string name="session_new">Sesi Baru</string>
+    <string name="session_name">Nama Sesi</string>
+    <string name="session_create">Buat Sesi</string>
+    <string name="session_delete">Hapus Sesi</string>
+    <string name="session_manage">Kelola Sesi</string>
+    
+    <!-- Bookmarks -->
+    <string name="bookmarks_title">Penanda</string>
+    <string name="bookmarks_empty">Belum ada penanda</string>
+    <string name="bookmarks_add_hint">Tambahkan penanda saat membaca untuk menyimpan halaman favorit Anda</string>
+    <string name="bookmarks_delete">Hapus Penanda</string>
+    <string name="bookmarks_clear_all">Hapus Semua Penanda</string>
+    <string name="bookmarks_clear_confirm">Ini akan menghapus semua penanda Anda secara permanen. Tindakan ini tidak dapat dibatalkan.</string>
+    
+    <!-- Search -->
+    <string name="search_title">Cari Quran</string>
+    <string name="search_hint">Cari berdasarkan surah, juz, atau nomor halaman</string>
+    <string name="search_results">Hasil Pencarian</string>
+    <string name="search_no_results">Tidak ada hasil</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">Pengaturan</string>
+    <string name="settings_display_theme">Tema Tampilan</string>
+    <string name="settings_theme_zamrud">Zamrud Islami</string>
+    <string name="settings_theme_teal">Teal &amp; Dusk</string>
+    <string name="settings_theme_amber">Amber Masjid</string>
+    <string name="settings_theme_indigo">Indigo Malam</string>
+    <string name="settings_theme_material_you">Material You</string>
+    <string name="settings_theme_material_you_desc">Warna menyesuaikan dengan wallpaper Anda</string>
+    <string name="settings_theme_light">Terang</string>
+    <string name="settings_theme_dark">Gelap</string>
+    
+    <string name="settings_language">Language / Bahasa</string>
+    <string name="settings_app_language">Bahasa Aplikasi</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_indonesian">Bahasa Indonesia</string>
+    <string name="settings_language_changed">Bahasa Diubah</string>
+    <string name="settings_language_restart_message">Aplikasi perlu dimulai ulang untuk menerapkan perubahan bahasa.</string>
+    <string name="settings_restart_now">Mulai Ulang Sekarang</string>
+    <string name="settings_restart_later">Nanti</string>
+    
+    <string name="settings_content">Konten</string>
+    <string name="settings_downloads">Unduhan</string>
+    <string name="settings_downloads_desc">Kelola halaman Quran dan file audio</string>
+    
+    <string name="settings_data">Data</string>
+    <string name="settings_clear_bookmarks">Hapus Semua Penanda</string>
+    <string name="settings_clear_bookmarks_warning">Tindakan ini tidak dapat dibatalkan</string>
+    
+    <string name="settings_about">Tentang</string>
+    <string name="settings_version">Versi 3.0.0</string>
+    
+    <!-- Download Screen -->
+    <string name="download_title">Unduhan</string>
+    <string name="download_quran_pages">Halaman Quran</string>
+    <string name="download_audio">Rekaman Audio</string>
+    <string name="download_start">Mulai Unduh</string>
+    <string name="download_pause">Jeda</string>
+    <string name="download_resume">Lanjutkan</string>
+    <string name="download_cancel">Batal</string>
+    <string name="download_complete">Unduhan Selesai</string>
+    <string name="download_failed">Unduhan Gagal</string>
+    <string name="download_progress">Mengunduh: %1$d%%</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_welcome">Selamat Datang di Pembaca Quran</string>
+    <string name="onboarding_download_required">Unduhan Awal Diperlukan</string>
+    <string name="onboarding_download_desc">Unduh halaman Quran untuk mulai membaca</string>
+    <string name="onboarding_start">Mulai</string>
+    
+    <!-- Common -->
+    <string name="common_ok">OK</string>
+    <string name="common_cancel">Batal</string>
+    <string name="common_confirm">Konfirmasi</string>
+    <string name="common_delete">Hapus</string>
+    <string name="common_save">Simpan</string>
+    <string name="common_close">Tutup</string>
+    <string name="common_back">Kembali</string>
+    <string name="common_next">Berikutnya</string>
+    <string name="common_previous">Sebelumnya</string>
+    <string name="common_loading">Memuat…</string>
+    <string name="common_error">Kesalahan</string>
+    <string name="common_warning">Peringatan</string>
+    <string name="common_success">Berhasil</string>
+    
+    <!-- Juz Screen -->
+    <string name="juz_title">Daftar Juz</string>
+    <string name="juz_number">Juz %1$d</string>
+    <string name="juz_pages">Halaman %1$d - %2$d</string>
+    <string name="juz_tab">Juz</string>
+    <string name="surah_tab">Surah</string>
+    <string name="hizb_tab">Hizb</string>
+    <string name="surah_number">Surah %1$d</string>
+    <string name="surah_ayahs">%1$d Ayat</string>
+    <string name="surah_makki">Makkiyah</string>
+    <string name="surah_madani">Madaniyah</string>
+    <string name="hizb_number">Hizb %1$d</string>
+    <string name="hizb_quarter">Seperempat %1$d</string>
+    
+    <!-- Audio -->
+    <string name="audio_play">Putar</string>
+    <string name="audio_pause">Jeda</string>
+    <string name="audio_stop">Berhenti</string>
+    <string name="audio_repeat">Ulangi</string>
+    <string name="audio_repeat_count">Ulangi: %1$dx</string>
+    
+    <!-- Mushaf Reader -->
+    <string name="mushaf_page_info">Hal. %1$d / %2$d</string>
+    <string name="mushaf_toggle_info">Toggle Info</string>
+    <string name="mushaf_surah">Surah</string>
+    <string name="mushaf_juz">Juz</string>
+    
+    <!-- Session Complete -->
+    <string name="session_complete_title">Sesi Selesai</string>
+    <string name="session_complete_pages">%1$d halaman dibaca</string>
+    <string name="session_complete_time">%1$d menit</string>
+    <string name="session_continue_reading">Lanjutkan Membaca</string>
+    
+    <!-- Reading Session -->
+    <string name="reading_daily_quran">Quran Harian</string>
+    <string name="reading_start_session">Mulai Sesi</string>
+    <string name="reading_continue_session">Lanjutkan Sesi</string>
+    <string name="reading_session_target">Target sesi ini</string>
+    <string name="reading_pages_count">Jumlah halaman</string>
+    <string name="reading_start">Mulai</string>
+    <string name="reading_cancel">Batal</string>
+    <string name="reading_click_to_start">Klik \"Mulai Sesi\" untuk membaca Al-Quran</string>
+    
+    <!-- Dashboard -->
+    <string name="dashboard_continue_session">Lanjutkan Sesi</string>
+    <string name="dashboard_start_new_session">Mulai Sesi Baru</string>
+    <string name="dashboard_session_progress">%1$s • %2$d/%3$d halaman</string>
+    <string name="dashboard_continue_or_new">Lanjutkan sesi "%1$s" atau buat sesi baru</string>
+    <string name="dashboard_create_new_hint">Buat sesi baru untuk mulai membaca dengan target halaman</string>
+    <string name="dashboard_session_progress_label">Progress Sesi: %1$d dari %2$d halaman</string>
+    <string name="dashboard_overall_progress">Progress Keseluruhan: Halaman %1$d dari 604</string>
+    <string name="dashboard_new_session_title">Sesi Membaca Baru</string>
+    <string name="dashboard_session_name">Nama Sesi</string>
+    <string name="dashboard_target_pages">Target Halaman</string>
+    <string name="dashboard_start_from_current">Mulai dari halaman saat ini (Halaman %1$d)</string>
+    <string name="dashboard_start_page">Halaman Mulai (1-604)</string>
+    <string name="dashboard_create_start">Buat &amp; Mulai</string>
+</resources>

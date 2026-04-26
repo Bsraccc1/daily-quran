@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Decorative cartouche frame for the surah-name header in the mushaf
+  reader. Designed as a single-color vector so it can be tinted at runtime
+  with `MaterialTheme.colorScheme.outline` (or any colour the caller
+  picks) — that is what makes it light/dark adaptive.
+
+  Visual: a wide horizontal banner with a thin double-line border, four
+  filled corner medallions, two empty centre medallions on the top and
+  bottom edges, and a row of small diamond ornaments along the long
+  edges. The centre area is left empty so the surah-name Text composable
+  can be overlaid on top.
+
+  Viewport is 400x80 (5:1) — Compose stretches it to fit the parent
+  width while preserving aspect ratio.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="80dp"
+    android:viewportWidth="400"
+    android:viewportHeight="80">
+
+    <!-- Outer rectangle frame (1.5px stroke) -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M 8,8 L 392,8 L 392,72 L 8,72 Z" />
+
+    <!-- Inner rectangle frame (0.7px stroke) — creates the double-line look -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.7"
+        android:fillColor="#00000000"
+        android:pathData="M 14,14 L 386,14 L 386,66 L 14,66 Z" />
+
+    <!-- Four filled corner medallions -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 14,14 m -3.5,0 a 3.5,3.5 0 1,0 7,0 a 3.5,3.5 0 1,0 -7,0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 386,14 m -3.5,0 a 3.5,3.5 0 1,0 7,0 a 3.5,3.5 0 1,0 -7,0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 14,66 m -3.5,0 a 3.5,3.5 0 1,0 7,0 a 3.5,3.5 0 1,0 -7,0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 386,66 m -3.5,0 a 3.5,3.5 0 1,0 7,0 a 3.5,3.5 0 1,0 -7,0" />
+
+    <!-- Top centre ornamental medallion (hollow ring with inner dot) -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000"
+        android:pathData="M 200,8 m -5,0 a 5,5 0 1,0 10,0 a 5,5 0 1,0 -10,0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 200,8 m -1.5,0 a 1.5,1.5 0 1,0 3,0 a 1.5,1.5 0 1,0 -3,0" />
+
+    <!-- Bottom centre ornamental medallion (hollow ring with inner dot) -->
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:fillColor="#00000000"
+        android:pathData="M 200,72 m -5,0 a 5,5 0 1,0 10,0 a 5,5 0 1,0 -10,0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 200,72 m -1.5,0 a 1.5,1.5 0 1,0 3,0 a 1.5,1.5 0 1,0 -3,0" />
+
+    <!-- Top-edge diamond ornaments (small filled rhombuses, repeated) -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 60,11 L 63,8 L 60,5 L 57,8 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 100,11 L 103,8 L 100,5 L 97,8 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 140,11 L 143,8 L 140,5 L 137,8 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 260,11 L 263,8 L 260,5 L 257,8 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 300,11 L 303,8 L 300,5 L 297,8 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 340,11 L 343,8 L 340,5 L 337,8 Z" />
+
+    <!-- Bottom-edge diamond ornaments -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 60,75 L 63,72 L 60,69 L 57,72 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 100,75 L 103,72 L 100,69 L 97,72 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 140,75 L 143,72 L 140,69 L 137,72 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 260,75 L 263,72 L 260,69 L 257,72 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 300,75 L 303,72 L 300,69 L 297,72 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M 340,75 L 343,72 L 340,69 L 337,72 Z" />
+
+</vector>

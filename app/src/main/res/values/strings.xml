@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daily Quran</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_bookmarks">Bookmarks</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_settings">Settings</string>
+    
+    <!-- Home Screen -->
+    <string name="home_greeting">Assalamu\'alaikum</string>
+    <string name="home_continue_reading">Continue Reading</string>
+    <string name="home_start_new_session">Start New Session</string>
+    <string name="home_quick_access">Quick Access</string>
+    <string name="home_juz">Juz</string>
+    <string name="home_surah">Surah</string>
+    <string name="home_page">Page</string>
+    <string name="home_bookmark">Bookmark</string>
+    <string name="home_last_read">Last Read</string>
+    <string name="home_reading_stats">Reading Statistics</string>
+    <string name="home_pages_read">Pages Read</string>
+    <string name="home_reading_time">Reading Time</string>
+    <string name="home_minutes">minutes</string>
+    
+    <!-- Reading Screen -->
+    <string name="reading_page_of">Page %1$d of %2$d</string>
+    <string name="reading_add_bookmark">Add Bookmark</string>
+    <string name="reading_remove_bookmark">Remove Bookmark</string>
+    <string name="reading_go_to_page">Go to Page</string>
+    <string name="reading_settings">Reading Settings</string>
+    
+    <!-- Session Management -->
+    <string name="session_active">Active Session</string>
+    <string name="session_start_page">Start Page</string>
+    <string name="session_target_pages">Target Pages</string>
+    <string name="session_progress">Progress</string>
+    <string name="session_completed">Completed</string>
+    <string name="session_extend">Extend Session</string>
+    <string name="session_end">End Session</string>
+    <string name="session_new">New Session</string>
+    <string name="session_name">Session Name</string>
+    <string name="session_create">Create Session</string>
+    <string name="session_delete">Delete Session</string>
+    <string name="session_manage">Manage Sessions</string>
+    
+    <!-- Bookmarks -->
+    <string name="bookmarks_title">Bookmarks</string>
+    <string name="bookmarks_empty">No bookmarks yet</string>
+    <string name="bookmarks_add_hint">Add bookmarks while reading to save your favorite pages</string>
+    <string name="bookmarks_delete">Delete Bookmark</string>
+    <string name="bookmarks_clear_all">Clear All Bookmarks</string>
+    <string name="bookmarks_clear_confirm">This will permanently delete all your bookmarks. This action cannot be undone.</string>
+    
+    <!-- Search -->
+    <string name="search_title">Search Quran</string>
+    <string name="search_hint">Search by surah, juz, or page number</string>
+    <string name="search_results">Search Results</string>
+    <string name="search_no_results">No results found</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_display_theme">Display Theme</string>
+    <string name="settings_theme_zamrud">Zamrud Islami</string>
+    <string name="settings_theme_teal">Teal &amp; Dusk</string>
+    <string name="settings_theme_amber">Amber Masjid</string>
+    <string name="settings_theme_indigo">Indigo Malam</string>
+    <string name="settings_theme_material_you">Material You</string>
+    <string name="settings_theme_material_you_desc">Colors adapt to your wallpaper</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    
+    <string name="settings_language">Language / Bahasa</string>
+    <string name="settings_app_language">App Language</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_indonesian">Bahasa Indonesia</string>
+    <string name="settings_language_changed">Language Changed</string>
+    <string name="settings_language_restart_message">The app needs to restart to apply the language change.</string>
+    <string name="settings_restart_now">Restart Now</string>
+    <string name="settings_restart_later">Later</string>
+    
+    <string name="settings_content">Content</string>
+    <string name="settings_downloads">Downloads</string>
+    <string name="settings_downloads_desc">Manage Quran pages and audio files</string>
+    
+    <string name="settings_data">Data</string>
+    <string name="settings_clear_bookmarks">Clear All Bookmarks</string>
+    <string name="settings_clear_bookmarks_warning">This action cannot be undone</string>
+    
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version 3.0.0</string>
+    
+    <!-- Download Screen -->
+    <string name="download_title">Downloads</string>
+    <string name="download_quran_pages">Quran Pages</string>
+    <string name="download_audio">Audio Recitations</string>
+    <string name="download_start">Start Download</string>
+    <string name="download_pause">Pause</string>
+    <string name="download_resume">Resume</string>
+    <string name="download_cancel">Cancel</string>
+    <string name="download_complete">Download Complete</string>
+    <string name="download_failed">Download Failed</string>
+    <string name="download_progress">Downloading: %1$d%%</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_welcome">Welcome to Quran Reader</string>
+    <string name="onboarding_download_required">Initial Download Required</string>
+    <string name="onboarding_download_desc">Download Quran pages to start reading</string>
+    <string name="onboarding_start">Get Started</string>
+    
+    <!-- Common -->
+    <string name="common_ok">OK</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_save">Save</string>
+    <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
+    <string name="common_next">Next</string>
+    <string name="common_previous">Previous</string>
+    <string name="common_loading">Loading…</string>
+    <string name="common_error">Error</string>
+    <string name="common_warning">Warning</string>
+    <string name="common_success">Success</string>
+    
+    <!-- Juz Screen -->
+    <string name="juz_title">Juz List</string>
+    <string name="juz_number">Juz %1$d</string>
+    <string name="juz_pages">Pages %1$d - %2$d</string>
+    <string name="juz_tab">Juz</string>
+    <string name="surah_tab">Surah</string>
+    <string name="hizb_tab">Hizb</string>
+    <string name="surah_number">Surah %1$d</string>
+    <string name="surah_ayahs">%1$d Ayahs</string>
+    <string name="surah_makki">Makki</string>
+    <string name="surah_madani">Madani</string>
+    <string name="hizb_number">Hizb %1$d</string>
+    <string name="hizb_quarter">Quarter %1$d</string>
+    
+    <!-- Audio -->
+    <string name="audio_play">Play</string>
+    <string name="audio_pause">Pause</string>
+    <string name="audio_stop">Stop</string>
+    <string name="audio_repeat">Repeat</string>
+    <string name="audio_repeat_count">Repeat: %1$dx</string>
+    
+    <!-- Mushaf Reader -->
+    <string name="mushaf_page_info">Page %1$d / %2$d</string>
+    <string name="mushaf_toggle_info">Toggle Info</string>
+    <string name="mushaf_surah">Surah</string>
+    <string name="mushaf_juz">Juz</string>
+    
+    <!-- Session Complete -->
+    <string name="session_complete_title">Session Complete</string>
+    <string name="session_complete_pages">%1$d pages read</string>
+    <string name="session_complete_time">%1$d min</string>
+    <string name="session_continue_reading">Continue Reading</string>
+    
+    <!-- Reading Session -->
+    <string name="reading_daily_quran">Daily Quran</string>
+    <string name="reading_start_session">Start Session</string>
+    <string name="reading_continue_session">Continue Session</string>
+    <string name="reading_session_target">Session target</string>
+    <string name="reading_pages_count">Number of pages</string>
+    <string name="reading_start">Start</string>
+    <string name="reading_cancel">Cancel</string>
+    <string name="reading_click_to_start">Click "Start Session" to read the Quran</string>
+    
+    <!-- Dashboard -->
+    <string name="dashboard_continue_session">Continue Session</string>
+    <string name="dashboard_start_new_session">Start New Session</string>
+    <string name="dashboard_session_progress">%1$s • %2$d/%3$d pages</string>
+    <string name="dashboard_continue_or_new">Continue session "%1$s" or start a new session</string>
+    <string name="dashboard_create_new_hint">Create a new session to start reading with a page target</string>
+    <string name="dashboard_session_progress_label">Session Progress: %1$d of %2$d pages</string>
+    <string name="dashboard_overall_progress">Overall Progress: Page %1$d of 604</string>
+    <string name="dashboard_new_session_title">New Reading Session</string>
+    <string name="dashboard_session_name">Session Name</string>
+    <string name="dashboard_target_pages">Target Pages</string>
+    <string name="dashboard_start_from_current">Start from current page (Page %1$d)</string>
+    <string name="dashboard_start_page">Start Page (1-604)</string>
+    <string name="dashboard_create_start">Create &amp; Start</string>
+</resources>
