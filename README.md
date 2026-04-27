@@ -36,7 +36,6 @@ Known bugs:
 - UI positioning is poor on other devices, such as phones.
 
 
-Translated with DeepL.com (free version)
 ## Old Screenshots (not updated screenshot)
 
 ### Mushaf Reader
