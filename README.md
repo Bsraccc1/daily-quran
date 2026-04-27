@@ -18,7 +18,7 @@ To Do :
 
 
 
-## Screenshots
+## Old Screenshots (not updated screenshot)
 
 ### Mushaf Reader
 
