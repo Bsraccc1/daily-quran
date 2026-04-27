@@ -10,6 +10,14 @@ Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles a
 
 ---
 
+To Do :
+- add translation each ayah
+- add more qari in audio
+- new quran layout type
+- make sure all ui works in all dpi phone
+
+
+
 ## Screenshots
 
 ### Mushaf Reader
