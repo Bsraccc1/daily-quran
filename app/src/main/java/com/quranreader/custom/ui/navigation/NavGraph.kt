@@ -48,8 +48,19 @@ sealed class Screen(val route: String) {
         fun createRoute(page: Int, surah: Int = 0, ayah: Int = 0) =
             "mushaf/$page?surah=$surah&ayah=$ayah"
     }
-    object MushafReaderWithSession : Screen("mushaf_session/{page}") {
-        fun createRoute(page: Int) = "mushaf_session/$page"
+    /**
+     * Mushaf reader with auto-session start. The session metadata
+     * (start page + target pages) is passed explicitly through the
+     * route arguments instead of read from DataStore so the
+     * `LaunchedEffect` that calls `startSessionWithStart(...)` on the
+     * reader doesn't race the legacy session Flow's first emission.
+     * Without this, opening from a multi-session card would default
+     * `targetPages` to the user's `newSessionLimit` setting (typically
+     * 5) regardless of what the session actually requested.
+     */
+    object MushafReaderWithSession : Screen("mushaf_session/{page}?startPage={startPage}&targetPages={targetPages}") {
+        fun createRoute(page: Int, startPage: Int = page, targetPages: Int = 0) =
+            "mushaf_session/$page?startPage=$startPage&targetPages=$targetPages"
     }
     object Juz : Screen("juz")
     object Sessions : Screen("sessions")
@@ -148,8 +159,14 @@ fun QuranNavGraph(
                             launchSingleTop = true
                         }
                     },
-                    onNavigateToMushafWithSession = { page ->
-                        navController.navigate(Screen.MushafReaderWithSession.createRoute(page)) {
+                    onNavigateToMushafWithSession = { page, startPage, targetPages ->
+                        navController.navigate(
+                            Screen.MushafReaderWithSession.createRoute(
+                                page = page,
+                                startPage = startPage,
+                                targetPages = targetPages,
+                            )
+                        ) {
                             launchSingleTop = true
                         }
                     }
@@ -171,9 +188,19 @@ fun QuranNavGraph(
             // ── Tab 3: Session ────────────────────────────────────────────────
             composable(Screen.Sessions.route) {
                 SessionManagementScreen(
-                    onStartReading = { page ->
-                        // Navigate to Mushaf Reader WITH session auto-start
-                        navController.navigate(Screen.MushafReaderWithSession.createRoute(page)) {
+                    onStartReading = { page, startPage, targetPages ->
+                        // Navigate to Mushaf Reader WITH session auto-start.
+                        // We forward `startPage` and `targetPages` explicitly
+                        // so the reader's auto-session uses the *session's*
+                        // start + target instead of racing the legacy
+                        // DataStore Flow's first emission.
+                        navController.navigate(
+                            Screen.MushafReaderWithSession.createRoute(
+                                page = page,
+                                startPage = startPage,
+                                targetPages = targetPages,
+                            )
+                        ) {
                             launchSingleTop = true
                         }
                     }
@@ -269,14 +296,31 @@ fun QuranNavGraph(
                     navArgument("page") {
                         type = NavType.IntType
                         defaultValue = 1
+                    },
+                    navArgument("startPage") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    },
+                    navArgument("targetPages") {
+                        type = NavType.IntType
+                        defaultValue = 0
                     }
                 )
             ) { backStackEntry ->
                 val page = backStackEntry.arguments?.getInt("page") ?: 1
+                // 0 means "not provided" — the reader falls back to the
+                // page itself for startPage and to the user's
+                // newSessionLimit setting for targetPages. This keeps
+                // existing call sites that still construct the legacy
+                // `mushaf_session/{page}` URL working without surprise.
+                val startPage = backStackEntry.arguments?.getInt("startPage")?.takeIf { it > 0 } ?: page
+                val targetPages = backStackEntry.arguments?.getInt("targetPages") ?: 0
                 MushafReaderScreen(
                     initialPage = page,
                     onBack = { navController.popBackStack() },
-                    startSessionAutomatically = true  // Auto-start session
+                    startSessionAutomatically = true,
+                    sessionStartPageOverride = startPage,
+                    sessionTargetPagesOverride = targetPages,
                 )
             }
 

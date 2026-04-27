@@ -86,7 +86,13 @@
     <string name="settings_data">Data</string>
     <string name="settings_clear_bookmarks">Hapus Semua Penanda</string>
     <string name="settings_clear_bookmarks_warning">Tindakan ini tidak dapat dibatalkan</string>
-    
+    <string name="settings_clear_history">Hapus Semua Riwayat</string>
+    <string name="settings_clear_history_warning">Menghapus penanda, sesi, halaman terakhir, statistik membaca, dan riwayat hafalan. Pengaturan tetap utuh.</string>
+    <string name="settings_clear_history_confirm_title">Hapus semua riwayat?</string>
+    <string name="settings_clear_history_confirm_message">Ini akan menghapus permanen seluruh penanda, semua sesi membaca, halaman terakhir, statistik membaca, dan setiap sesi hafalan. Pengaturan tema, bahasa, dan qari tetap dipertahankan. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="settings_clear_history_action">Hapus Semuanya</string>
+    <string name="settings_clear_history_done">Semua riwayat telah dihapus</string>
+
     <string name="settings_about">Tentang</string>
     <string name="settings_version">Versi 3.0.0</string>
     

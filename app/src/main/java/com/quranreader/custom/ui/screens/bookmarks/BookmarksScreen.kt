@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.quranreader.custom.data.QuranInfo
 import com.quranreader.custom.data.model.Bookmark
 import com.quranreader.custom.ui.components.animated.ChipRow
 import com.quranreader.custom.ui.theme.Motion
@@ -83,7 +84,12 @@ fun BookmarksScreen(
     val sorted = remember(filtered, sort) {
         when (sort) {
             BookmarkSort.Date -> filtered.sortedByDescending { it.timestamp }
-            BookmarkSort.Surah -> filtered.sortedBy { it.surah ?: Int.MAX_VALUE }
+            // Sort by surah uses the resolved surah (per-ayah surah if
+            // present, otherwise derived from page) so page-only
+            // bookmarks aren't all dumped at the end of the list.
+            BookmarkSort.Surah -> filtered.sortedWith(
+                compareBy({ bookmarkSurahNumber(it) }, { it.ayah ?: 0 })
+            )
             BookmarkSort.Page -> filtered.sortedBy { it.page }
         }
     }
@@ -180,11 +186,23 @@ fun BookmarksScreen(
     }
 }
 
+/**
+ * Resolve the surah a bookmark belongs to. Per-ayah bookmarks store
+ * the surah explicitly; page-level bookmarks (surah = null) get the
+ * surah that *starts on or before* the page so the bookmark UI can
+ * always lead with a surah name instead of a bare page number — the
+ * thing the user actually remembers.
+ */
+private fun bookmarkSurahNumber(bookmark: Bookmark): Int =
+    bookmark.surah ?: ((1..114).lastOrNull { QuranInfo.getStartPage(it) <= bookmark.page } ?: 1)
+
 private fun buildShareText(bookmark: Bookmark): String {
-    val ref = if (bookmark.surah != null && bookmark.ayah != null) {
-        "Surah ${bookmark.surah}, Ayah ${bookmark.ayah} (page ${bookmark.page})"
+    val surahNum = bookmarkSurahNumber(bookmark)
+    val surahName = QuranInfo.getSurahEnglishName(surahNum)
+    val ref = if (bookmark.ayah != null) {
+        "$surahName ($surahNum:${bookmark.ayah}) — page ${bookmark.page}"
     } else {
-        "Page ${bookmark.page}"
+        "$surahName (Surah $surahNum) — page ${bookmark.page}"
     }
     return "Check out this bookmark in my Quran reader: $ref"
 }
@@ -294,12 +312,35 @@ private fun SwipeBackgroundRow(
     }
 }
 
+/**
+ * Bookmark row leading with the **surah name** instead of the page
+ * number. Page numbers are an implementation detail of how the
+ * Mushaf is laid out — when users come back to "the bookmark I made
+ * in Al-Baqarah", they remember the surah and (sometimes) the
+ * verse, never the absolute page index. Layout:
+ *
+ *  - 56 dp avatar with the surah *number* (1–114) — visually
+ *    equivalent to the old page badge but ties straight to the
+ *    canonical reference everyone knows.
+ *  - Title row: surah English name + "(N)" surah number, bold.
+ *  - Subtitle row: "Verse N · Page P" when the bookmark stores a
+ *    specific ayah; just "Page P" for page-level bookmarks. Both
+ *    make page secondary so the user reads "what" (surah) before
+ *    "where in the binding" (page).
+ *  - Footer row: relative timestamp.
+ */
 @Composable
 private fun BookmarkCard(
     bookmark: Bookmark,
     onClick: () -> Unit,
     onShare: () -> Unit
 ) {
+    val surahNum = bookmarkSurahNumber(bookmark)
+    val surahName = remember(surahNum) { QuranInfo.getSurahEnglishName(surahNum) }
+    val secondaryLine = bookmark.ayah?.let { ayah ->
+        "Verse $ayah · Page ${bookmark.page}"
+    } ?: "Page ${bookmark.page}"
+
     Card(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
@@ -323,7 +364,7 @@ private fun BookmarkCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        bookmark.page.toString(),
+                        surahNum.toString(),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -332,21 +373,20 @@ private fun BookmarkCard(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Page ${bookmark.page}",
+                    "$surahName ($surahNum)",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                 )
-                if (bookmark.surah != null && bookmark.ayah != null) {
-                    Text(
-                        "Surah ${bookmark.surah} : Ayah ${bookmark.ayah}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    secondaryLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     formatRelativeTime(bookmark.timestamp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 )
             }
             IconButton(onClick = onShare) {

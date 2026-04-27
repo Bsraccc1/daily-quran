@@ -51,4 +51,7 @@ class MemorizationRepository @Inject constructor(
 
     suspend fun getById(id: Long) = dao.getById(id)
     suspend fun delete(id: Long) = dao.delete(id)
+
+    /** Wipe every memorization session row. Called by Settings → Clear all history. */
+    suspend fun clearAll() = dao.deleteAll()
 }

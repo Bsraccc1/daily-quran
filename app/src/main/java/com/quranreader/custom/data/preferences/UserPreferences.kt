@@ -166,6 +166,28 @@ class UserPreferences @Inject constructor(
         else prefs[ACTIVE_SESSION_ID_KEY] = sessionId
     }
 
+    /**
+     * Wipe everything we treat as "user history": multi-session list,
+     * legacy single-session keys, last page, and the reading stats.
+     * Called by Settings → Clear all history. Doesn't touch the
+     * theme, language, reciter, or reminder preferences — those are
+     * configuration, not history.
+     */
+    suspend fun clearAllHistory() = dataStore.edit { prefs ->
+        // Multi-session
+        prefs.remove(SESSIONS_KEY)
+        prefs.remove(ACTIVE_SESSION_ID_KEY)
+        // Legacy single-session
+        prefs.remove(SESSION_ACTIVE_KEY)
+        prefs.remove(SESSION_START_PAGE_KEY)
+        prefs.remove(SESSION_TARGET_PAGES_KEY)
+        // Last page resets back to page 1
+        prefs.remove(LAST_PAGE_KEY)
+        // Reading stats — counts as history
+        prefs.remove(TOTAL_PAGES_READ_KEY)
+        prefs.remove(READING_TIME_MINUTES_KEY)
+    }
+
     private fun serializeSessions(list: List<ReadingSession>): String =
         list.joinToString(";") { s ->
             "${s.id}|${s.name}|${s.startPage}|${s.targetPages}|${s.pagesRead}|${s.isActive}|${s.isCompleted}"

@@ -117,6 +117,25 @@ fun MushafReaderScreen(
     initialPage: Int,
     onBack: () -> Unit = {},
     startSessionAutomatically: Boolean = false,
+    /**
+     * When [startSessionAutomatically] is true, anchor the session to
+     * this page and run the limit math from here. Defaults to 0
+     * meaning "use [initialPage]" so existing call sites (Juz,
+     * Bookmark, search) still work. The Session and Dashboard tabs
+     * pass these explicitly so the limit window is keyed off the
+     * user's chosen start page even if the pager hasn't reported
+     * back its own position yet.
+     */
+    sessionStartPageOverride: Int = 0,
+    /**
+     * When [startSessionAutomatically] is true, the number of pages
+     * the session should cover. 0 means "use the user's
+     * `newSessionLimit` setting" (legacy behaviour). The session
+     * card and the Dashboard's "Create & Start" flow pass the actual
+     * value here so a target of 10 is honored as 10, not silently
+     * downgraded to 5 (or whatever `newSessionLimit` is set to).
+     */
+    sessionTargetPagesOverride: Int = 0,
     // When the user enters this screen via the "search by surah + ayah"
     // flow we receive the verse coordinates here and pre-highlight the
     // matching ayah on first composition. Both default to 0 which means
@@ -141,7 +160,6 @@ fun MushafReaderScreen(
     val showSessionCompleteSheet by
         readingViewModel.showSessionCompleteSheet.collectAsStateWithLifecycle()
     val pagesReadInSession by readingViewModel.pagesReadInSession.collectAsStateWithLifecycle()
-    val sessionState by readingViewModel.sessionState.collectAsStateWithLifecycle()
     val sessionTargetPages by readingViewModel.sessionTargetPages.collectAsStateWithLifecycle()
     val newSessionLimit by readingViewModel.newSessionLimit.collectAsStateWithLifecycle()
 
@@ -187,14 +205,38 @@ fun MushafReaderScreen(
         }
     }
 
-    // Auto-start session if requested
-    LaunchedEffect(startSessionAutomatically, sessionTargetPages, sessionState, currentPageNumber) {
-        if (startSessionAutomatically &&
-            sessionState == com.quranreader.custom.ui.viewmodel.SessionState.IDLE
-        ) {
-            val targetPages = if (sessionTargetPages > 0) sessionTargetPages else newSessionLimit
-            readingViewModel.startNewSession(targetPages)
+    // Auto-start session if requested.
+    //
+    // We prefer the route-supplied overrides over the legacy DataStore
+    // Flow because the latter races with the pager's first
+    // `setCurrentPage(...)` emission. Without the overrides, opening
+    // an existing multi-session would silently downgrade `targetPages`
+    // to the user's `newSessionLimit` setting (typically 5), regardless
+    // of what the session actually requested — the bug the user
+    // reported as "target=10 but I'm limited to 6 pages forward".
+    //
+    // The keys include the overrides so navigating to a *different*
+    // session (different start/target on the same composable
+    // instance via `launchSingleTop`) re-arms with the new values.
+    // `startSessionWithStart` itself is idempotent for unchanged args
+    // so simple recompositions don't reset the timer.
+    LaunchedEffect(
+        startSessionAutomatically,
+        sessionStartPageOverride,
+        sessionTargetPagesOverride,
+        initialPage,
+    ) {
+        if (!startSessionAutomatically) return@LaunchedEffect
+        val resolvedStart = if (sessionStartPageOverride > 0) sessionStartPageOverride else initialPage
+        val resolvedTarget = when {
+            sessionTargetPagesOverride > 0 -> sessionTargetPagesOverride
+            sessionTargetPages > 0 -> sessionTargetPages
+            else -> newSessionLimit
         }
+        readingViewModel.startSessionWithStart(
+            startPage = resolvedStart,
+            targetPages = resolvedTarget,
+        )
     }
 
     // Auto-play audio when page changes (if already playing)
@@ -213,11 +255,18 @@ fun MushafReaderScreen(
         }
     }
 
-    // Panels are visible iff an ayah is currently highlighted. This
-    // flips the previous "tap-toggle" model: now the *highlight* IS
-    // the panel state. Audio-driven highlights also count, so the
-    // panels follow along while the page is being recited.
-    val panelsVisible = highlightedAyah != null
+    // Panels are visible iff the highlighted ayah is on the page
+    // currently being viewed. Two safeguards in one expression:
+    //  1. `highlightedAyah != null`     — user has actually selected
+    //     a verse (we don't show panels for audio-driven highlights
+    //     the user never asked for; that's reserved for the visual
+    //     rectangle on the page only).
+    //  2. `it.page == currentPageNumber` — the user has not swiped
+    //     away from the page where the selection lives. Swiping back
+    //     restores the panels because the highlight itself persists
+    //     in the ViewModel; we just hide the chrome while it's
+    //     out-of-frame so the chips never show stale page/juz info.
+    val panelsVisible = highlightedAyah?.let { it.page == currentPageNumber } == true
 
     // System back button: when panels are showing, clear the highlight
     // first so the user gets a smooth dismiss step. A second back
@@ -299,9 +348,14 @@ fun MushafReaderScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
+            // Panel data is sourced from the *highlight* itself, not
+            // from the live pager. That keeps the chips consistent
+            // during the exit animation when AnimatedVisibility is
+            // still rendering the panel but the user has already
+            // swiped to a different page.
             TopInfoPanel(
                 hazeState = hazeState,
-                pageNumber = currentPageNumber,
+                pageNumber = highlightedAyah?.page ?: currentPageNumber,
                 surahNumber = highlightedAyah?.surah ?: 1,
                 ayahNumber = highlightedAyah?.ayah ?: 1,
                 onClose = { readingViewModel.clearHighlight() },

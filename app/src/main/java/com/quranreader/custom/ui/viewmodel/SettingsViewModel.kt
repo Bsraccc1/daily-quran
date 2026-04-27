@@ -2,6 +2,7 @@ package com.quranreader.custom.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.quranreader.custom.data.memorization.MemorizationRepository
 import com.quranreader.custom.data.preferences.DisplayMode
 import com.quranreader.custom.data.preferences.UserPreferences
 import com.quranreader.custom.data.repository.BookmarkRepository
@@ -15,6 +16,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val userPreferences: UserPreferences,
     private val bookmarkRepository: BookmarkRepository,
+    private val memorizationRepository: MemorizationRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -99,6 +101,23 @@ class SettingsViewModel @Inject constructor(
     fun clearAllBookmarks() {
         viewModelScope.launch {
             bookmarkRepository.clearAll()
+        }
+    }
+
+    /**
+     * Wipe **everything** the user could call "history": all
+     * bookmarks, all multi-session entries, the active legacy
+     * session, the last-page pointer, the lifetime reading stats,
+     * and every memorization session row. Configuration (theme,
+     * language, reciter, reminders) is intentionally untouched —
+     * those aren't history, they're settings, and the user wouldn't
+     * expect them to reset just because they cleared "history".
+     */
+    fun clearAllHistory() {
+        viewModelScope.launch {
+            bookmarkRepository.clearAll()
+            memorizationRepository.clearAll()
+            userPreferences.clearAllHistory()
         }
     }
 }

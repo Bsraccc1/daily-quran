@@ -22,7 +22,20 @@ import com.quranreader.custom.ui.viewmodel.SessionViewModel
  */
 @Composable
 fun SessionManagementScreen(
-    onStartReading: (Int) -> Unit,
+    /**
+     * Invoked when the user activates a session. Receives:
+     *  - `page`        — the page to land on (current progress, not just startPage),
+     *  - `startPage`   — the session's anchor page (used by the reader's
+     *                     limit math; never the same as `page` once the
+     *                     user has read at least one page),
+     *  - `targetPages` — the total pages the session should cover.
+     *
+     * The host wires these into the reader's nav route so the
+     * auto-session uses the exact values the user picked instead of
+     * defaulting to `newSessionLimit` while the legacy DataStore Flow
+     * is still settling.
+     */
+    onStartReading: (page: Int, startPage: Int, targetPages: Int) -> Unit,
     viewModel: SessionViewModel = hiltViewModel()
 ) {
     val sessions by viewModel.sessions.collectAsState()
@@ -74,7 +87,15 @@ fun SessionManagementScreen(
                         isActive = session.id == activeSessionId,
                         onActivate = {
                             viewModel.activateSession(session)
-                            onStartReading(session.startPage)
+                            // Land on the user's actual progress within
+                            // the session — `startPage + pagesRead` —
+                            // not the anchor page itself, so re-opening
+                            // an in-progress session resumes where the
+                            // user left off. The limit math still keys
+                            // off the anchor page passed separately.
+                            val resumePage = (session.startPage + session.pagesRead)
+                                .coerceIn(1, 604)
+                            onStartReading(resumePage, session.startPage, session.targetPages)
                         },
                         onRename = { showRenameDialog = session },
                         onExtend = { showExtendDialog = session },

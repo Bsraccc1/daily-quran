@@ -27,6 +27,7 @@ import com.quranreader.custom.R
 import com.quranreader.custom.ui.MainActivity
 import com.quranreader.custom.ui.components.animated.ExpandableSection
 import com.quranreader.custom.ui.viewmodel.SettingsViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Settings Screen — v3.0 redesign (REQ-011).
@@ -53,11 +54,19 @@ fun SettingsScreen(
     val themeId by viewModel.themeId.collectAsState()
     val appLanguage by viewModel.appLanguage.collectAsState()
     var showClearBookmarksDialog by remember { mutableStateOf(false) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showRestartDialog by remember { mutableStateOf(false) }
     var pendingLanguageCode by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -331,6 +340,50 @@ fun SettingsScreen(
             }
         }
 
+        // ── Card: Clear All History ──────────────────────────────────────────
+        // Nukes everything we treat as "user history": bookmarks, all
+        // multi-session entries, the legacy active session, the
+        // last-page pointer, lifetime reading stats, and every
+        // memorization session row. Configuration (theme, language,
+        // reciter, reminder time) is intentionally preserved — those
+        // are settings, not history.
+        item {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showClearHistoryDialog = true }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            context.getString(R.string.settings_clear_history),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            context.getString(R.string.settings_clear_history_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+
         // ── Card: About ──────────────────────────────────────────────────────
         item {
             SettingsCard {
@@ -384,6 +437,7 @@ fun SettingsScreen(
         // Bottom spacing
         item { Spacer(Modifier.height(24.dp)) }
     }
+    } // close Scaffold content slot
 
     // ── Clear Bookmarks Confirmation Dialog ──────────────────────────────────
     if (showClearBookmarksDialog) {
@@ -410,6 +464,51 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearBookmarksDialog = false }) {
+                    Text(context.getString(R.string.common_cancel))
+                }
+            }
+        )
+    }
+
+    // ── Clear All History Confirmation Dialog ────────────────────────────────
+    // Two-step confirmation matches the bookmarks delete flow so a
+    // muscle-memory tap doesn't nuke a year of reading progress. The
+    // snackbar afterwards lets the user see something happened
+    // (otherwise the screen looks identical because Settings doesn't
+    // surface stats here).
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(context.getString(R.string.settings_clear_history_confirm_title)) },
+            text = {
+                Text(context.getString(R.string.settings_clear_history_confirm_message))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearAllHistory()
+                    showClearHistoryDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.settings_clear_history_done),
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                }) {
+                    Text(
+                        context.getString(R.string.settings_clear_history_action),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
                     Text(context.getString(R.string.common_cancel))
                 }
             }

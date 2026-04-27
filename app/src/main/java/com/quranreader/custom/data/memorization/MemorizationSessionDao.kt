@@ -35,4 +35,8 @@ interface MemorizationSessionDao {
 
     @Query("DELETE FROM memorization_sessions WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /** Wipe every memorization session — used by "Clear all history". */
+    @Query("DELETE FROM memorization_sessions")
+    suspend fun deleteAll()
 }

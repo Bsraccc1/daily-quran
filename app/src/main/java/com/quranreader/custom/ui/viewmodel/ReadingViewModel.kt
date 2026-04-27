@@ -264,6 +264,47 @@ class ReadingViewModel @Inject constructor(
         sessionStartTimeMs = System.currentTimeMillis()
     }
 
+    /**
+     * Start a session with an explicit [startPage] and [targetPages] —
+     * deterministic counterpart to [startNewSession] used by the
+     * Session and Dashboard tabs. The legacy variant reads
+     * `_currentPage`, which races with the pager's first
+     * `setCurrentPage(...)` emission and previously caused multi-session
+     * starts to use the wrong page (the user reported "target=10 but I'm
+     * limited to 6 pages forward" because `_currentPage` was still 1
+     * when the auto-start fired). Passing both values explicitly keeps
+     * the limit math anchored to what the user picked, regardless of
+     * Flow timing.
+     *
+     * Idempotent: re-entering the reader with the **same** session
+     * parameters is a no-op (back-navigation shouldn't reset the
+     * session timer or the completion sheet). Re-entering with
+     * **different** parameters re-arms — that's how the Session
+     * tab lets the user switch between sessions without first
+     * clearing the previously active one.
+     */
+    fun startSessionWithStart(startPage: Int, targetPages: Int) {
+        val safeStart = startPage.coerceIn(1, 604)
+        val pages = targetPages.coerceAtLeast(1)
+        val newTarget = (safeStart + pages).coerceAtMost(605)
+
+        if (_sessionState.value == SessionState.ACTIVE &&
+            _sessionStartPage.value == safeStart &&
+            _sessionTargetPage.value == newTarget
+        ) {
+            // Same session as last time — leave the duration timer
+            // and completion-sheet flag alone.
+            return
+        }
+
+        _sessionStartPage.value = safeStart
+        _sessionTargetPage.value = newTarget
+        _sessionState.value = SessionState.ACTIVE
+        _hasNavigatedToMushaf.value = false
+        _showSessionCompleteSheet.value = false
+        sessionStartTimeMs = System.currentTimeMillis()
+    }
+
     /** Mark that we've navigated to mushaf */
     fun markNavigatedToMushaf() {
         _hasNavigatedToMushaf.value = true
