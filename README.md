@@ -15,6 +15,10 @@ To Do :
 - add more qari in audio
 - new quran layout type
 - make sure all ui works in all dpi phone
+- add session management start page, can based at juz or some page
+
+known bug :
+- audio download ui when clicked can't click settings again
 
 
 
