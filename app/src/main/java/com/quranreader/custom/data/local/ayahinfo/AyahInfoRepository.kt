@@ -16,4 +16,12 @@ class AyahInfoRepository @Inject constructor(
 
     suspend fun glyphsForAyah(page: Int, surah: Int, ayah: Int): List<GlyphEntity> =
         glyphDao.glyphsForAyah(page, surah, ayah)
+
+    /**
+     * Resolve the mushaf page where (surah, ayah) starts. Used by the
+     * "search by surah + ayah" flow to jump straight to the page and
+     * pre-highlight the verse on arrival.
+     */
+    suspend fun pageForAyah(surah: Int, ayah: Int): Int? =
+        glyphDao.pageForAyah(surah, ayah)
 }

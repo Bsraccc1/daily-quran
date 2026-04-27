@@ -64,7 +64,19 @@ fun MushafImageRenderer(
     pageNumber: Int,
     highlightedAyah: HighlightedAyah?,
     onAyahLongPress: (surah: Int, ayah: Int) -> Unit,
+    /**
+     * Fires when the user taps on the page margin / negative space,
+     * i.e. *not* on any glyph. The reader uses this to clear the
+     * highlight, which dismisses the slide-down + slide-up panels.
+     */
     onSingleTap: () -> Unit = {},
+    /**
+     * Lightweight tap handler: fires when the user single-taps directly
+     * on a glyph rectangle. Used to drive the click-to-highlight flow
+     * without triggering the long-press action menu — the highlight
+     * itself is what reveals the slide-down and slide-up panels.
+     */
+    onAyahTap: (surah: Int, ayah: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     @Suppress("UNUSED_PARAMETER") fontScale: Float = 1.0f,
     viewModel: MushafImagePageViewModel = hiltViewModel(key = "mushaf_image_$pageNumber"),
@@ -113,7 +125,22 @@ fun MushafImageRenderer(
                     .fillMaxSize()
                     .pointerInput(pageNumber, glyphs.size) {
                         detectTapGestures(
-                            onTap = { onSingleTap() },
+                            onTap = { offset ->
+                                // Hit-test first: a tap that lands on a
+                                // glyph means "highlight this verse",
+                                // a tap on margin / negative space falls
+                                // through to the existing info-panel
+                                // toggle. This gives users the
+                                // click-to-highlight behaviour without
+                                // breaking the established chrome
+                                // toggle UX.
+                                val hit = hitTest(glyphs, offset, scaleX, scaleY)
+                                if (hit != null) {
+                                    onAyahTap(hit.suraNumber, hit.ayahNumber)
+                                } else {
+                                    onSingleTap()
+                                }
+                            },
                             onLongPress = { offset ->
                                 val hit = hitTest(glyphs, offset, scaleX, scaleY)
                                 if (hit != null) {

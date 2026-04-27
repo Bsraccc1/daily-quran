@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.data.QuranInfo
 import com.quranreader.custom.ui.components.CircularReadingProgress
+import com.quranreader.custom.ui.screens.search.AyahSearchDialog
 import com.quranreader.custom.ui.viewmodel.ReadingViewModel
 import com.quranreader.custom.ui.viewmodel.SessionViewModel
 
@@ -29,7 +30,12 @@ import com.quranreader.custom.ui.viewmodel.SessionViewModel
  */
 @Composable
 fun DashboardScreen(
-    onNavigateToSearch: () -> Unit = {},
+    /**
+     * Invoked when the search dialog resolves a (surah, ayah) pair to
+     * a mushaf page. The host (NavGraph) jumps to the reader with the
+     * verse pre-highlighted via the bundled `ayahinfo.db`.
+     */
+    onNavigateToAyah: (page: Int, surah: Int, ayah: Int) -> Unit = { _, _, _ -> },
     onNavigateToMushafWithSession: (Int) -> Unit = {},
     readingViewModel: ReadingViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel()
@@ -72,6 +78,9 @@ fun DashboardScreen(
     
     // Dialog states
     var showCreateSessionDialog by remember { mutableStateOf(false) }
+    // The Find-Verse dialog replaces the old fullscreen Search route.
+    // Hosted here because Dashboard owns the only entry point.
+    var showSearchDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -92,7 +101,7 @@ fun DashboardScreen(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary
             )
-            IconButton(onClick = onNavigateToSearch) {
+            IconButton(onClick = { showSearchDialog = true }) {
                 Icon(Icons.Outlined.Search, contentDescription = context.getString(com.quranreader.custom.R.string.nav_search))
             }
         }
@@ -294,6 +303,20 @@ fun DashboardScreen(
                     Text(context.getString(com.quranreader.custom.R.string.common_cancel)) 
                 }
             }
+        )
+    }
+
+    // ── Find-Verse popup dialog ──────────────────────────────────────
+    // Mounted at the bottom so its window sits above the rest of the
+    // dashboard chrome. The dialog is responsible for its own sizing
+    // (DPI-agnostic via dp + percentage of available window) — we just
+    // wire dismiss and the resolved (page, surah, ayah) callback.
+    if (showSearchDialog) {
+        AyahSearchDialog(
+            onDismiss = { showSearchDialog = false },
+            onResult = { page, surah, ayah ->
+                onNavigateToAyah(page, surah, ayah)
+            },
         )
     }
 }

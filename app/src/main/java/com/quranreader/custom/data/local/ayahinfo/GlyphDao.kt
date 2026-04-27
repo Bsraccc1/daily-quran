@@ -23,6 +23,19 @@ interface GlyphDao {
     """)
     suspend fun glyphsForAyah(page: Int, surah: Int, ayah: Int): List<GlyphEntity>
 
+    /**
+     * First mushaf page that contains the requested (surah, ayah). An ayah
+     * can span two pages — we always return the page where it *starts*
+     * so search-and-jump lands on the visible beginning of the verse.
+     * Returns `null` when the (surah, ayah) pair has no glyph row, which
+     * means the input was invalid.
+     */
+    @Query("""
+        SELECT MIN(page_number) FROM glyphs
+        WHERE sura_number = :surah AND ayah_number = :ayah
+    """)
+    suspend fun pageForAyah(surah: Int, ayah: Int): Int?
+
     @Query("SELECT COUNT(*) FROM glyphs")
     suspend fun count(): Int
 }

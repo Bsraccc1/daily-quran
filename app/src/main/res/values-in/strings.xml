@@ -149,6 +149,17 @@
     <string name="mushaf_toggle_info">Toggle Info</string>
     <string name="mushaf_surah">Surah</string>
     <string name="mushaf_juz">Juz</string>
+    <string name="mushaf_page_label">Hal. %1$d</string>
+    <string name="mushaf_juz_label">Juz %1$d</string>
+    <string name="mushaf_ayah_label">Ayat %1$d:%2$d</string>
+    <string name="mushaf_panel_close">Tutup pilihan</string>
+    <string name="mushaf_action_back">Kembali</string>
+    <string name="mushaf_action_translate">Terjemahkan ayat</string>
+    <string name="mushaf_action_audio_play">Putar audio halaman</string>
+    <string name="mushaf_action_audio_pause">Jeda audio halaman</string>
+    <string name="mushaf_action_memorize">Hafalkan ayat</string>
+    <string name="mushaf_action_bookmark_add">Tandai ayat</string>
+    <string name="mushaf_action_bookmark_remove">Lepas tanda ayat</string>
     
     <!-- Session Complete -->
     <string name="session_complete_title">Sesi Selesai</string>
@@ -180,4 +191,31 @@
     <string name="dashboard_start_from_current">Mulai dari halaman saat ini (Halaman %1$d)</string>
     <string name="dashboard_start_page">Halaman Mulai (1-604)</string>
     <string name="dashboard_create_start">Buat &amp; Mulai</string>
+
+    <!-- Search → Cari Ayat -->
+    <string name="search_chip_ayah">Ayat</string>
+    <string name="search_ayah_title">Cari Ayat</string>
+    <string name="search_ayah_picker_placeholder">Cari surah (nama atau nomor)</string>
+    <string name="search_ayah_clear">Hapus</string>
+    <string name="search_ayah_change">Ganti</string>
+    <string name="search_ayah_count_label">%1$d ayat</string>
+    <string name="search_ayah_picker_subtitle">%1$d ayat • Halaman %2$d</string>
+    <string name="search_ayah_input_label">Nomor Ayat</string>
+    <string name="search_ayah_input_placeholder">1 – %1$d</string>
+    <string name="search_ayah_input_max">Maks: %1$d</string>
+    <string name="search_ayah_submit">Cari Ayat</string>
+    <string name="search_ayah_error_no_surah">Pilih surah terlebih dahulu</string>
+    <string name="search_ayah_error_not_a_number">Masukkan angka yang valid</string>
+    <string name="search_ayah_error_below_min">Ayat dimulai dari 1</string>
+    <string name="search_ayah_error_above_max">Surah ini hanya memiliki %1$d ayat</string>
+    <string name="search_ayah_error_not_found">Ayat tidak ditemukan di mushaf</string>
+    <string name="search_ayah_close">Tutup</string>
+    <string name="search_ayah_subtitle">Pilih surah dan nomor ayat tujuan</string>
+    <string name="search_ayah_field_surah">Surah</string>
+    <string name="search_ayah_field_surah_placeholder">Pilih surah</string>
+    <string name="search_ayah_field_ayah">Ayat</string>
+    <string name="search_ayah_field_ayah_range">Ayat (1–%1$d)</string>
+    <string name="search_ayah_field_ayah_disabled">Pilih surah terlebih dahulu</string>
+    <string name="search_ayah_cancel">Batal</string>
+    <string name="search_ayah_pick_surah_title">Pilih Surah</string>
 </resources>

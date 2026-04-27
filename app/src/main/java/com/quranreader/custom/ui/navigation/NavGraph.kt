@@ -32,7 +32,6 @@ import com.quranreader.custom.ui.screens.home.DashboardScreen
 import com.quranreader.custom.ui.screens.juz.JuzScreen
 import com.quranreader.custom.ui.screens.memorization.MemorizationHistoryScreen
 import com.quranreader.custom.ui.screens.reading.MushafReaderScreen
-import com.quranreader.custom.ui.screens.search.SearchScreen
 import com.quranreader.custom.ui.screens.session.SessionManagementScreen
 import com.quranreader.custom.ui.screens.settings.SettingsScreen
 import com.quranreader.custom.ui.viewmodel.SettingsViewModel
@@ -41,8 +40,13 @@ import com.quranreader.custom.ui.viewmodel.SettingsViewModel
 
 sealed class Screen(val route: String) {
     object Reading : Screen("reading")
-    object MushafReader : Screen("mushaf/{page}") {
-        fun createRoute(page: Int) = "mushaf/$page"
+    // page is the mandatory path arg; surah+ayah are optional query args
+    // used by the "search by surah and ayah" flow so we land on the page
+    // already highlighting the requested verse. Both default to 0 which
+    // means "no pre-highlight" so all existing call sites keep working.
+    object MushafReader : Screen("mushaf/{page}?surah={surah}&ayah={ayah}") {
+        fun createRoute(page: Int, surah: Int = 0, ayah: Int = 0) =
+            "mushaf/$page?surah=$surah&ayah=$ayah"
     }
     object MushafReaderWithSession : Screen("mushaf_session/{page}") {
         fun createRoute(page: Int) = "mushaf_session/$page"
@@ -51,7 +55,6 @@ sealed class Screen(val route: String) {
     object Sessions : Screen("sessions")
     object Bookmarks : Screen("bookmarks")
     object Settings : Screen("settings")
-    object Search : Screen("search")
     object ManageDownloads : Screen("manage_downloads") // audio downloads
     object MemorizationHistory : Screen("memorization_history")
 }
@@ -134,8 +137,16 @@ fun QuranNavGraph(
             // ── Tab 1: Reading (Dashboard - With Session Controls) ───────────
             composable(Screen.Reading.route) {
                 DashboardScreen(
-                    onNavigateToSearch = {
-                        navController.navigate(Screen.Search.route)
+                    // Search now lives in a dialog hosted inside
+                    // DashboardScreen — this callback fires only after
+                    // the user has resolved a verse, jumping straight
+                    // to the reader pre-highlighted.
+                    onNavigateToAyah = { page, surah, ayah ->
+                        navController.navigate(
+                            Screen.MushafReader.createRoute(page, surah, ayah)
+                        ) {
+                            launchSingleTop = true
+                        }
                     },
                     onNavigateToMushafWithSession = { page ->
                         navController.navigate(Screen.MushafReaderWithSession.createRoute(page)) {
@@ -227,14 +238,27 @@ fun QuranNavGraph(
                     navArgument("page") {
                         type = NavType.IntType
                         defaultValue = 1
+                    },
+                    navArgument("surah") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    },
+                    navArgument("ayah") {
+                        type = NavType.IntType
+                        defaultValue = 0
                     }
                 )
             ) { backStackEntry ->
-                val page = backStackEntry.arguments?.getInt("page") ?: 1
+                val args = backStackEntry.arguments
+                val page = args?.getInt("page") ?: 1
+                val surah = args?.getInt("surah") ?: 0
+                val ayah = args?.getInt("ayah") ?: 0
                 MushafReaderScreen(
                     initialPage = page,
                     onBack = { navController.popBackStack() },
-                    startSessionAutomatically = false
+                    startSessionAutomatically = false,
+                    initialHighlightSurah = surah,
+                    initialHighlightAyah = ayah,
                 )
             }
 
@@ -256,18 +280,9 @@ fun QuranNavGraph(
                 )
             }
 
-            // ── Secondary: Search ─────────────────────────────────────────────
-            composable(Screen.Search.route) {
-                SearchScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onNavigateToReading = { page ->
-                        // Navigate directly to Mushaf Reader, not dashboard
-                        navController.navigate(Screen.MushafReader.createRoute(page)) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
+            // Search is no longer a destination in the nav graph — it
+            // lives as a popup dialog hosted inside DashboardScreen so
+            // there's no fullscreen route to register here.
         }
     }
 }

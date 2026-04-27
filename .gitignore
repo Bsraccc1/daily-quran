@@ -98,6 +98,8 @@ debug_*.log
 .devin/
 .claude/
 .agents/
+.codex/
+skills-lock.json
 qoder-reset/
 claude-frontend-skills/
 AGENTS.md

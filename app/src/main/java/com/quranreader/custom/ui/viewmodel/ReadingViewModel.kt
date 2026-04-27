@@ -12,6 +12,7 @@ import com.quranreader.custom.data.repository.BookmarkRepository
 import com.quranreader.custom.data.repository.QuranRepository
 import com.quranreader.custom.util.safeLaunch
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
@@ -51,6 +52,31 @@ class ReadingViewModel @Inject constructor(
 
     private val _showAyahDialog = MutableStateFlow(false)
     val showAyahDialog: StateFlow<Boolean> = _showAyahDialog.asStateFlow()
+
+    /**
+     * Reactive bookmark state for the *currently highlighted* ayah. The
+     * Mushaf reader's slide-up action panel binds to this so the
+     * bookmark icon updates instantly when the user (a) picks a new
+     * ayah, or (b) toggles the bookmark from elsewhere (e.g. the
+     * Bookmarks tab). [flatMapLatest] is the right combinator because
+     * it cancels the previous DB subscription as soon as the highlight
+     * changes — there's no risk of a stale row leaking through.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val highlightedAyahBookmarked: StateFlow<Boolean> = _highlightedAyah
+        .flatMapLatest { ayah ->
+            if (ayah == null) flowOf(false)
+            else bookmarkRepository.observeAyahBookmarked(
+                page = ayah.page,
+                surah = ayah.surah,
+                ayah = ayah.ayah,
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false,
+        )
 
     // F-06: UI visibility for fullscreen mode
     private val _isUiVisible = MutableStateFlow(true)
@@ -340,32 +366,43 @@ class ReadingViewModel @Inject constructor(
         }
     }
 
-    // Ayah interaction
+    // Ayah interaction (long-press path — also opens the ayah action dialog).
     fun onAyahTapped(page: Int, surah: Int, ayah: Int) {
         safeLaunch {
-            val bookmark = bookmarkRepository.getBookmarkByPage(page)
-            val isBookmarked = bookmark?.surah == surah && bookmark.ayah == ayah
-
+            val isBookmarked = bookmarkRepository.findBookmarkByAyah(page, surah, ayah) != null
             _highlightedAyah.value = HighlightedAyah(
                 page = page,
                 surah = surah,
                 ayah = ayah,
-                isBookmarked = isBookmarked
+                isBookmarked = isBookmarked,
             )
-
             _showAyahDialog.value = true
         }
     }
 
+    /**
+     * Toggle a bookmark on the *currently highlighted* ayah. Keys off
+     * the precise (page, surah, ayah) triple so per-ayah bookmarks on
+     * the same page are independent — toggling 2:255 will never affect
+     * 2:256, and neither will affect a page-level bookmark on the
+     * same page (where surah/ayah are NULL in the schema).
+     *
+     * The reactive [highlightedAyahBookmarked] flow is the source of
+     * truth for the icon state in the slide-up panel; this function
+     * just flips the underlying row.
+     */
     fun toggleAyahBookmark() {
         safeLaunch(
             onError = { _errorMessage.value = "Failed to toggle bookmark" }
         ) {
             val ayah = _highlightedAyah.value ?: return@safeLaunch
-            val bookmark = bookmarkRepository.getBookmarkByPage(ayah.page)
-
-            if (bookmark != null && bookmark.surah == ayah.surah && bookmark.ayah == ayah.ayah) {
-                bookmarkRepository.removeBookmark(bookmark)
+            val existing = bookmarkRepository.findBookmarkByAyah(
+                page = ayah.page,
+                surah = ayah.surah,
+                ayah = ayah.ayah,
+            )
+            if (existing != null) {
+                bookmarkRepository.removeBookmarkByAyah(ayah.page, ayah.surah, ayah.ayah)
                 _highlightedAyah.value = ayah.copy(isBookmarked = false)
             } else {
                 bookmarkRepository.addBookmark(ayah.page, ayah.surah, ayah.ayah)
@@ -377,5 +414,34 @@ class ReadingViewModel @Inject constructor(
     fun clearHighlight() {
         _highlightedAyah.value = null
         _showAyahDialog.value = false
+    }
+
+    /**
+     * Pre-highlight an ayah without showing the action dialog. Used by
+     *  - the "search by surah + ayah" flow so the user lands on the page
+     *    with the verse already lit up; and
+     *  - any tap on a glyph in the Mushaf renderer (drives the
+     *    slide-down + slide-up panels via [highlightedAyah]).
+     *
+     * Skips a no-op set when the same ayah is already highlighted
+     * (e.g. from a previous tap) so we don't fight a user who has
+     * already moved on.
+     */
+    fun setInitialHighlight(page: Int, surah: Int, ayah: Int) {
+        if (surah <= 0 || ayah <= 0) return
+        val current = _highlightedAyah.value
+        if (current?.page == page && current.surah == surah && current.ayah == ayah) return
+        safeLaunch {
+            // Look up the *exact* per-ayah row, not the first page-level
+            // bookmark. The reactive flow takes over from here, so this
+            // is just a one-shot seed for the very first frame.
+            val isBookmarked = bookmarkRepository.findBookmarkByAyah(page, surah, ayah) != null
+            _highlightedAyah.value = HighlightedAyah(
+                page = page,
+                surah = surah,
+                ayah = ayah,
+                isBookmarked = isBookmarked,
+            )
+        }
     }
 }

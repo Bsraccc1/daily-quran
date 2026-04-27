@@ -114,6 +114,12 @@ dependencies {
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    // Haze — Compose backdrop-blur library used to give the
+    // mushaf reader's slide-down panel a localised frosted-glass
+    // effect without blurring the calligraphy on the rest of the
+    // page. Pinned to 0.7.x for Compose BOM 2024.05 compatibility.
+    implementation("dev.chrisbanes.haze:haze:0.7.3")
+
     // Retrofit for API calls
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")

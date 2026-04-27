@@ -149,6 +149,17 @@
     <string name="mushaf_toggle_info">Toggle Info</string>
     <string name="mushaf_surah">Surah</string>
     <string name="mushaf_juz">Juz</string>
+    <string name="mushaf_page_label">Page %1$d</string>
+    <string name="mushaf_juz_label">Juz %1$d</string>
+    <string name="mushaf_ayah_label">Verse %1$d:%2$d</string>
+    <string name="mushaf_panel_close">Close selection</string>
+    <string name="mushaf_action_back">Back</string>
+    <string name="mushaf_action_translate">Translate verse</string>
+    <string name="mushaf_action_audio_play">Play page audio</string>
+    <string name="mushaf_action_audio_pause">Pause page audio</string>
+    <string name="mushaf_action_memorize">Memorize verse</string>
+    <string name="mushaf_action_bookmark_add">Bookmark verse</string>
+    <string name="mushaf_action_bookmark_remove">Remove verse bookmark</string>
     
     <!-- Session Complete -->
     <string name="session_complete_title">Session Complete</string>
@@ -180,4 +191,31 @@
     <string name="dashboard_start_from_current">Start from current page (Page %1$d)</string>
     <string name="dashboard_start_page">Start Page (1-604)</string>
     <string name="dashboard_create_start">Create &amp; Start</string>
+
+    <!-- Search → Cari Ayat (verse lookup) -->
+    <string name="search_chip_ayah">Verse</string>
+    <string name="search_ayah_title">Find Verse</string>
+    <string name="search_ayah_picker_placeholder">Search surah (name or number)</string>
+    <string name="search_ayah_clear">Clear</string>
+    <string name="search_ayah_change">Change</string>
+    <string name="search_ayah_count_label">%1$d verses</string>
+    <string name="search_ayah_picker_subtitle">%1$d verses • Page %2$d</string>
+    <string name="search_ayah_input_label">Verse Number</string>
+    <string name="search_ayah_input_placeholder">1 – %1$d</string>
+    <string name="search_ayah_input_max">Max: %1$d</string>
+    <string name="search_ayah_submit">Find Verse</string>
+    <string name="search_ayah_error_no_surah">Pick a surah first</string>
+    <string name="search_ayah_error_not_a_number">Enter a valid number</string>
+    <string name="search_ayah_error_below_min">Verses start from 1</string>
+    <string name="search_ayah_error_above_max">This surah only has %1$d verses</string>
+    <string name="search_ayah_error_not_found">Verse not found in the mushaf</string>
+    <string name="search_ayah_close">Close</string>
+    <string name="search_ayah_subtitle">Pick a surah and verse to jump to</string>
+    <string name="search_ayah_field_surah">Surah</string>
+    <string name="search_ayah_field_surah_placeholder">Pick surah</string>
+    <string name="search_ayah_field_ayah">Verse</string>
+    <string name="search_ayah_field_ayah_range">Verse (1–%1$d)</string>
+    <string name="search_ayah_field_ayah_disabled">Pick a surah first</string>
+    <string name="search_ayah_cancel">Cancel</string>
+    <string name="search_ayah_pick_surah_title">Pick a Surah</string>
 </resources>
