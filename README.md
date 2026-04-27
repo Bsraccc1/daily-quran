@@ -11,17 +11,32 @@ Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles a
 ---
 
 To Do :
-- add translation each ayah
-- add more qari in audio
-- new quran layout type
-- make sure all ui works in all dpi phone
-- add session management start page, can based at juz or some page
+- Add translations for each verse
+- Display only the translation of the currently highlighted verse; for the translation download interface, activate it when the translation button is clicked, and display a complete list of available translations from the API, such as from quran.com and others
+- The translation interface should not cover the entire screen, but rather appear as a vertical slider
+- Add an option to display only the highlighted verse, or all verses
+- Translate on every page; if a page starts at 1 and ends at 7, display only 1–7 if the user selects all verses,
+- if the user selects verse 6, display only the translation of verse 6
+- Add more reciters to the audio
+- New Quran layout type
+- Ensure all user interfaces function across all phone screen resolutions (DPI)
+- Add home page session management, which can be based on a specific juz or page
+- Add landscape mode support; when the phone is in landscape mode, the Quran reader will be zoomed in for easier reading
+- Replace all Mac blur effects in the source code with Gaussian Blur for better aesthetics
+- Users can switch surahs via the swipe-down interface in the Quran reader
+- Add landscape and portrait orientation toggle buttons in the swipe-up interface in the Quran reader
+- Add distinct button interfaces in the swipe-down interface for navigation option 1 (surah and verse) and option 2 (page)
+- Updated the screenshot preview in readme.md
 
-known bug :
-- audio download ui when clicked can't click settings again
+Known bugs:
+- Audio download interface: after clicking “Browse Surah,” users cannot click “Settings” again
+- Session progress updates only occur when clicking “Continue Reading,” not when actually switching to the next page to update progress in session management
+  (consider adding a delay of about 5 seconds to ensure the user has scrolled and is reading on the new page)
+- User interface (UI) positioning is not optimal on other devices such as phones, etc.
+- UI positioning is poor on other devices, such as phones.
 
 
-
+Translated with DeepL.com (free version)
 ## Old Screenshots (not updated screenshot)
 
 ### Mushaf Reader
