@@ -182,4 +182,20 @@ object QuranNavigationData {
         val index = hizbList.indexOfLast { it.startPage <= page }
         return if (index >= 0) (index % 4) + 1 else 1
     }
+
+    /**
+     * Returns `(startPage, pageSpan)` for the given juz number
+     * (1..30). Used by the Dashboard's Juz-based session create flow
+     * to convert "I want to study Juz 17" into the
+     * `(startPage=322, targetPages=20)` payload expected by
+     * `SessionViewModel.createSession()`. The last juz is slightly
+     * shorter than 20 pages (582..604) — we use the actual `endPage`
+     * from [juzList] instead of hard-coding 20 so the math stays
+     * correct at the tail of the mushaf.
+     */
+    fun juzPageBounds(juz: Int): Pair<Int, Int> {
+        val info = juzList.firstOrNull { it.number == juz } ?: juzList[0]
+        val span = (info.endPage - info.startPage + 1).coerceAtLeast(1)
+        return info.startPage to span
+    }
 }

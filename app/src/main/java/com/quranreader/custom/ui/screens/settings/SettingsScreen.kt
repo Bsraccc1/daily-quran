@@ -24,8 +24,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.R
+import com.quranreader.custom.data.audio.Reciters
 import com.quranreader.custom.ui.MainActivity
 import com.quranreader.custom.ui.components.animated.ExpandableSection
+import com.quranreader.custom.ui.viewmodel.AudioViewModel
 import com.quranreader.custom.ui.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
@@ -48,11 +50,13 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onNavigateToManageDownloads: () -> Unit = {},
     onNavigateToMemorizationHistory: () -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    audioViewModel: AudioViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val themeId by viewModel.themeId.collectAsState()
     val appLanguage by viewModel.appLanguage.collectAsState()
+    val currentReciter by audioViewModel.currentReciter.collectAsState()
     var showClearBookmarksDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showRestartDialog by remember { mutableStateOf(false) }
@@ -141,6 +145,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
@@ -271,6 +276,61 @@ fun SettingsScreen(
                             }
                         )
                         Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+
+        // ── Card: Reciter (v9.0) ─────────────────────────────────────────────
+        // Pulls the curated everyayah-backed list from
+        // [Reciters.DEFAULT_RECITERS]. The expanded set (12 reciters,
+        // up from 3) covers the classical murattal recitations the
+        // app needs to feel competitive with quran.com / Tarteel —
+        // adding more later means appending to the static list and
+        // wiring the quran.com `recitation_id` in
+        // [com.quranreader.custom.data.audio.timing.ReciterRecitationMap]
+        // so the highlight sync still hits.
+        item {
+            SettingsCard {
+                ExpandableSection(
+                    title = "Reciter",
+                    icon = Icons.Default.MusicNote,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Reciters.DEFAULT_RECITERS.forEach { reciter ->
+                            val selected = reciter.id == currentReciter.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        audioViewModel.setReciter(reciter.id)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = null,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = reciter.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Audio streams from everyayah.com. Recitations without verified " +
+                                "quran.com timing data will play normally but lose per-ayah " +
+                                "highlight sync.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

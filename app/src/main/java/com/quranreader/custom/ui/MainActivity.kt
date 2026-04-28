@@ -33,6 +33,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Default the rest of the app to portrait. The MushafReaderScreen
+        // overrides this via DisposableEffect when the user picks
+        // PORTRAIT/LANDSCAPE/AUTO from the swipe-up panel, and restores
+        // this value on exit so the dashboard / sessions / settings tabs
+        // never end up landscape-locked accidentally.
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val themeId by settingsViewModel.themeId.collectAsState()

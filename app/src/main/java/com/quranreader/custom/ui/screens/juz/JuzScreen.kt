@@ -102,7 +102,7 @@ private fun JuzList(onNavigateToReading: (Int) -> Unit) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(QuranNavigationData.juzList) { juz ->
+        items(QuranNavigationData.juzList, key = { it.number }) { juz ->
             JuzCard(juz = juz, onClick = { onNavigateToReading(juz.startPage) })
         }
     }
@@ -367,7 +367,7 @@ private fun HizbList(onNavigateToReading: (Int) -> Unit) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(QuranNavigationData.hizbList) { hizb ->
+        items(QuranNavigationData.hizbList, key = { "${it.number}_${it.quarter}" }) { hizb ->
             HizbCard(hizb = hizb, onClick = { onNavigateToReading(hizb.startPage) })
         }
     }

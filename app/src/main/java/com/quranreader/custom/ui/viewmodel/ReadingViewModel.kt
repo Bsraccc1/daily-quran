@@ -7,14 +7,17 @@ import com.quranreader.custom.data.local.AyahCoordinateDao
 import com.quranreader.custom.data.model.AyahCoordinate
 import com.quranreader.custom.data.model.HighlightedAyah
 import com.quranreader.custom.data.model.QuranPage
+import com.quranreader.custom.data.preferences.ReaderOrientation
 import com.quranreader.custom.data.preferences.UserPreferences
 import com.quranreader.custom.data.repository.BookmarkRepository
 import com.quranreader.custom.data.repository.QuranRepository
 import com.quranreader.custom.util.safeLaunch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
@@ -81,6 +84,36 @@ class ReadingViewModel @Inject constructor(
     // F-06: UI visibility for fullscreen mode
     private val _isUiVisible = MutableStateFlow(true)
     val isUiVisible: StateFlow<Boolean> = _isUiVisible.asStateFlow()
+
+    /**
+     * Reader orientation override. Backed by [UserPreferences] so the
+     * choice survives configuration changes and process death. The
+     * reader's swipe-up panel surfaces a toggle button that cycles
+     * through AUTO → PORTRAIT → LANDSCAPE so the user can lock the
+     * mushaf into landscape (zoomed view) without flipping their
+     * device's global rotation lock.
+     */
+    val readerOrientation: StateFlow<ReaderOrientation> = userPreferences.readerOrientation
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = ReaderOrientation.AUTO,
+        )
+
+    fun cycleReaderOrientation() {
+        viewModelScope.launch {
+            val next = when (readerOrientation.value) {
+                ReaderOrientation.AUTO -> ReaderOrientation.PORTRAIT
+                ReaderOrientation.PORTRAIT -> ReaderOrientation.LANDSCAPE
+                ReaderOrientation.LANDSCAPE -> ReaderOrientation.AUTO
+            }
+            userPreferences.setReaderOrientation(next)
+        }
+    }
+
+    fun setReaderOrientation(orientation: ReaderOrientation) {
+        viewModelScope.launch { userPreferences.setReaderOrientation(orientation) }
+    }
 
     // F-02: Go to Page dialog state
     private val _showGoToPageDialog = MutableStateFlow(false)
@@ -183,6 +216,42 @@ class ReadingViewModel @Inject constructor(
     // Track last page for statistics
     private var lastTrackedPage: Int? = null
 
+    /**
+     * Debounce window before a multi-session's persisted `pagesRead`
+     * counter is bumped. The user wanted progress to reflect pages
+     * actually *read*, not pages flicked past while scrolling — a
+     * 5-second dwell weeds out ambient swipes (e.g. scrubbing back to
+     * confirm a translation) without making the chrome feel laggy.
+     *
+     * Pulled out as a const so the corresponding regression test
+     * (instrumented `ReadingViewModel.sessionProgressDebounceTest`)
+     * can reuse the exact value.
+     */
+    private val sessionProgressDwellMs = 5_000L
+
+    init {
+        // Multi-session DataStore writes are debounced — see
+        // [sessionProgressDwellMs]. The in-memory `_currentPage`,
+        // last-page DataStore key, and lifetime page counter still
+        // update immediately inside [setCurrentPage] so the UI never
+        // looks stale; only the persisted session counter waits.
+        @OptIn(FlowPreview::class)
+        viewModelScope.launch {
+            _currentPage
+                .debounce(sessionProgressDwellMs)
+                .distinctUntilChanged()
+                .collect { page -> persistSessionProgress(page) }
+        }
+    }
+
+    private suspend fun persistSessionProgress(page: Int) {
+        val activeSessionId = userPreferences.activeSessionId.first() ?: return
+        val sessions = userPreferences.sessions.first()
+        val activeSession = sessions.find { it.id == activeSessionId } ?: return
+        val pagesRead = (page - activeSession.startPage + 1).coerceAtLeast(0)
+        userPreferences.updateSessionProgress(pagesRead)
+    }
+
     fun clearError() {
         _errorMessage.value = null
     }
@@ -203,17 +272,10 @@ class ReadingViewModel @Inject constructor(
                 lastTrackedPage = page
             }
 
-            // ── Update multi-session pagesRead (for Session tab sync) ──
-            // Get active session from SessionViewModel and update its progress
-            val activeSessionId = userPreferences.activeSessionId.first()
-            if (activeSessionId != null) {
-                val sessions = userPreferences.sessions.first()
-                val activeSession = sessions.find { it.id == activeSessionId }
-                if (activeSession != null) {
-                    val pagesRead = (page - activeSession.startPage + 1).coerceAtLeast(0)
-                    userPreferences.updateSessionProgress(pagesRead)
-                }
-            }
+            // Multi-session `pagesRead` is persisted on a 5-second
+            // debounce by the [init] collector so quick swipes don't
+            // inflate progress. The collector uses the same
+            // [_currentPage] flow we just updated above.
 
             // ── Auto-session: check limit ──
             val start = _sessionStartPage.value

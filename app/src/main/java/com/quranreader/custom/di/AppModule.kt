@@ -10,6 +10,9 @@ import com.quranreader.custom.data.audio.timing.AyahTimingApi
 import com.quranreader.custom.data.audio.timing.AyahTimingDao
 import com.quranreader.custom.data.memorization.MemorizationSessionDao
 import com.quranreader.custom.data.local.AyahCoordinateDao
+import com.quranreader.custom.data.local.RecitationDao
+import com.quranreader.custom.data.local.TranslationEditionDao
+import com.quranreader.custom.data.remote.QuranComApi
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import com.quranreader.custom.data.local.BookmarkDao
@@ -43,7 +46,8 @@ object AppModule {
             QuranDatabase.MIGRATION_4_5,
             QuranDatabase.MIGRATION_5_6,
             QuranDatabase.MIGRATION_6_7,
-            QuranDatabase.MIGRATION_7_8
+            QuranDatabase.MIGRATION_7_8,
+            QuranDatabase.MIGRATION_8_9
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -117,6 +121,30 @@ object AppModule {
     @Singleton
     fun provideAyahTimingApi(retrofit: Retrofit): AyahTimingApi {
         return retrofit.create(AyahTimingApi::class.java)
+    }
+
+    /**
+     * Quran.com REST surface for translations + recitations editions.
+     * Shares the same Retrofit instance as [AyahTimingApi] — they
+     * both target `https://api.quran.com/`, so re-using the client
+     * keeps OkHttp connections pooled.
+     */
+    @Provides
+    @Singleton
+    fun provideQuranComApi(retrofit: Retrofit): QuranComApi {
+        return retrofit.create(QuranComApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideTranslationEditionDao(database: QuranDatabase): TranslationEditionDao {
+        return database.translationEditionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRecitationDao(database: QuranDatabase): RecitationDao {
+        return database.recitationDao()
     }
 
     /**

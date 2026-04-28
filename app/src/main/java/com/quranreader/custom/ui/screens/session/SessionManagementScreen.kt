@@ -1,5 +1,6 @@
 package com.quranreader.custom.ui.screens.session
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -146,13 +148,22 @@ fun SessionManagementScreen(
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { startFromCurrent = !startFromCurrent }
+                            .padding(vertical = 4.dp)
                     ) {
                         Checkbox(
                             checked = startFromCurrent,
-                            onCheckedChange = { startFromCurrent = it }
+                            onCheckedChange = null,
                         )
-                        Text("Start from current page (Page $lastPage)")
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Start from current page (Page $lastPage)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                     if (!startFromCurrent) {
                         OutlinedTextField(

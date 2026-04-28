@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -33,16 +34,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.data.QuranInfo
+import com.quranreader.custom.data.QuranNavigationData
 import com.quranreader.custom.ui.components.CircularReadingProgress
 import com.quranreader.custom.ui.screens.search.AyahSearchDialog
 import com.quranreader.custom.ui.viewmodel.ReadingViewModel
 import com.quranreader.custom.ui.viewmodel.SessionViewModel
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
 import kotlin.math.ceil
 import kotlin.math.sqrt
+
+/**
+ * Anchor strategy for the Home → Create-Session dialog. PAGE keeps
+ * the legacy "start at page X, run for Y pages" flow; JUZ derives
+ * both fields from the canonical juz boundary table — picking
+ * Juz 7 means pages 122..141, no manual math required.
+ */
+private enum class SessionBasis(val label: String) {
+    PAGE("Page"),
+    JUZ("Juz");
+}
 
 /**
  * Dashboard Screen - Shows circular progress and session controls
@@ -96,8 +105,8 @@ fun DashboardScreen(
     
     val currentSurah = remember(currentPage) {
         QuranInfo.getSurahEnglishName(
-            (1..114).firstOrNull { 
-                QuranInfo.getStartPage(it) <= currentPage 
+            (1..114).lastOrNull {
+                QuranInfo.getStartPage(it) <= currentPage
             } ?: 1
         )
     }
@@ -109,30 +118,27 @@ fun DashboardScreen(
     // Hosted here because Dashboard owns the only entry point.
     var showSearchDialog by remember { mutableStateOf(false) }
 
-    // ── Frosted-glass background (Haze) ──────────────────────────────────────
+    // ── Backdrop ─────────────────────────────────────────────────────────────
     // Two layers:
-    //  1. The "source" — a vertical gradient driven by the active
-    //     `colorScheme.primaryContainer → background → secondaryContainer`
+    //  1. A vertical gradient driven by the active
+    //     `colorScheme.primaryContainer → background → secondaryContainer`,
     //     so the dashboard re-tints whenever the user switches between
     //     Zamrud / Teal / Amber / Indigo / Material You. On top of the
     //     gradient we tile a low-alpha **Rub el Hizb** (eight-pointed
     //     star) pattern — a fully symmetric Islamic motif — so the
-    //     frosted panels have a textured backdrop to blur. Replaces the
-    //     previous trio of asymmetric blurred orbs which felt chaotic.
-    //  2. The "foreground" Column with the header, glass panels, and
-    //     bottom hints. Anything wrapped in [GlassPanel] samples and
-    //     blurs whatever is rendered behind it via `hazeChild(...)`.
+    //     translucent panels have a textured backdrop.
+    //  2. The "foreground" Column with the header, panels, and
+    //     bottom hints.
     //
-    // On Android < 12 Haze's `RenderEffect` gracefully falls back to a
-    // solid tint, so the cards still read as semi-transparent panels —
-    // they just don't get the live blur.
-    val hazeState = remember { HazeState() }
+    // Frosted-glass (Haze) was retired in v9.0.0 in favour of plain
+    // translucent surfaces — they render identically on every API
+    // level and removed a moderately heavy GPU dependency.
     val cs = MaterialTheme.colorScheme
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Layer 1 — backdrop (haze source). The vertical gradient pulls
-        // its stops from the active palette so the same composable
-        // re-tints across all 5 themes without per-theme branching.
+        // Layer 1 — backdrop. The vertical gradient pulls its stops
+        // from the active palette so the same composable re-tints
+        // across all 5 themes without per-theme branching.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -144,14 +150,13 @@ fun DashboardScreen(
                             cs.secondaryContainer.copy(alpha = 0.40f),
                         )
                     )
-                )
-                .haze(state = hazeState),
+                ),
         ) {
             // Symmetric Islamic geometric pattern — tiled eight-pointed
             // stars (Rub el Hizb) at low alpha. Stroke colour follows
             // `cs.primary`, accent dots follow `cs.tertiary`, both at
             // alphas low enough to keep foreground chrome legible while
-            // still giving Haze something to blur under glass panels.
+            // still giving the translucent panels a textured backdrop.
             IslamicPatternOverlay(
                 lineColor = cs.primary.copy(alpha = 0.14f),
                 accentColor = cs.tertiary.copy(alpha = 0.18f),
@@ -212,7 +217,6 @@ fun DashboardScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 GlassPanel(
-                    hazeState = hazeState,
                     shape = CircleShape,
                     modifier = Modifier
                         .size(232.dp),
@@ -238,7 +242,6 @@ fun DashboardScreen(
             // two buttons read as one cohesive panel even when only the
             // "Start New" button is showing (no active session).
             GlassPanel(
-                hazeState = hazeState,
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -354,7 +357,6 @@ fun DashboardScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 GlassPanel(
-                    hazeState = hazeState,
                     shape = RoundedCornerShape(50),
                 ) {
                     Text(
@@ -382,10 +384,18 @@ fun DashboardScreen(
 
     // Create Session Dialog
     if (showCreateSessionDialog) {
+        // The user can pick between two anchor strategies:
+        //  - PAGE: classic "start at page N, run for M pages"
+        //  - JUZ:  "start at the first page of juz J, run to its end"
+        // Picking JUZ auto-derives both `startPage` and the target
+        // span from the juz boundary table — the user only commits to
+        // *which* juz they want to study.
         var nameInput by remember { mutableStateOf(context.getString(com.quranreader.custom.R.string.session_new) + " ${sessions.size + 1}") }
+        var basis by remember { mutableStateOf(SessionBasis.PAGE) }
         var targetInput by remember { mutableStateOf("10") }
         var startFromCurrent by remember { mutableStateOf(true) }
         var customPageInput by remember { mutableStateOf(currentPage.toString()) }
+        var juzInput by remember { mutableStateOf(QuranInfo.getJuzForPage(currentPage).toString()) }
 
         AlertDialog(
             onDismissRequest = { showCreateSessionDialog = false },
@@ -399,66 +409,132 @@ fun DashboardScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = targetInput,
-                        onValueChange = { targetInput = it.filter { c -> c.isDigit() } },
-                        label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_target_pages)) },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
+                    // Page / Juz toggle. We use two FilterChips
+                    // because Material 3 SegmentedButton landed after
+                    // the Compose BOM this app pins to (2024.05).
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Checkbox(
-                            checked = startFromCurrent,
-                            onCheckedChange = { startFromCurrent = it }
-                        )
-                        Text(context.getString(com.quranreader.custom.R.string.dashboard_start_from_current, currentPage))
+                        SessionBasis.entries.forEach { b ->
+                            androidx.compose.material3.FilterChip(
+                                selected = basis == b,
+                                onClick = { basis = b },
+                                label = { Text(b.label) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
-                    if (!startFromCurrent) {
-                        OutlinedTextField(
-                            value = customPageInput,
-                            onValueChange = { customPageInput = it.filter { c -> c.isDigit() } },
-                            label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_start_page)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Done
-                            ),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+
+                    when (basis) {
+                        SessionBasis.PAGE -> {
+                            OutlinedTextField(
+                                value = targetInput,
+                                onValueChange = { targetInput = it.filter { c -> c.isDigit() } },
+                                label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_target_pages)) },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { startFromCurrent = !startFromCurrent }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = startFromCurrent,
+                                    onCheckedChange = null,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = context.getString(
+                                        com.quranreader.custom.R.string.dashboard_start_from_current,
+                                        currentPage,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            if (!startFromCurrent) {
+                                OutlinedTextField(
+                                    value = customPageInput,
+                                    onValueChange = { customPageInput = it.filter { c -> c.isDigit() } },
+                                    label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_start_page)) },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                        SessionBasis.JUZ -> {
+                            OutlinedTextField(
+                                value = juzInput,
+                                onValueChange = { juzInput = it.filter { c -> c.isDigit() }.take(2) },
+                                label = { Text("Juz number (1–30)") },
+                                supportingText = {
+                                    val j = juzInput.toIntOrNull()?.coerceIn(1, 30)
+                                    if (j != null) {
+                                        val (start, span) = QuranNavigationData.juzPageBounds(j)
+                                        Text("Pages $start–${start + span - 1} ($span pages)")
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done,
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             },
             confirmButton = {
                 Button(onClick = {
-                    val target = targetInput.toIntOrNull()?.coerceIn(1, 604) ?: 10
-                    val startPage = if (startFromCurrent) currentPage
-                    else customPageInput.toIntOrNull()?.coerceIn(1, 604) ?: currentPage
-                    
+                    val resolvedStartPage: Int
+                    val resolvedTarget: Int
+                    when (basis) {
+                        SessionBasis.PAGE -> {
+                            resolvedTarget = targetInput.toIntOrNull()?.coerceIn(1, 604) ?: 10
+                            resolvedStartPage = if (startFromCurrent) currentPage
+                                else customPageInput.toIntOrNull()?.coerceIn(1, 604) ?: currentPage
+                        }
+                        SessionBasis.JUZ -> {
+                            val juz = juzInput.toIntOrNull()?.coerceIn(1, 30) ?: 1
+                            val (start, span) = QuranNavigationData.juzPageBounds(juz)
+                            resolvedStartPage = start
+                            resolvedTarget = span
+                        }
+                    }
+
                     // Create session via SessionViewModel (syncs to Session tab)
                     sessionViewModel.createSession(
                         name = nameInput.ifBlank { context.getString(com.quranreader.custom.R.string.session_new) + " ${sessions.size + 1}" },
-                        startPage = startPage,
-                        targetPages = target
+                        startPage = resolvedStartPage,
+                        targetPages = resolvedTarget
                     )
-                    
+
                     showCreateSessionDialog = false
-                    
+
                     // Navigate to mushaf with new session — pass the
                     // anchor page + target along the route so the
                     // auto-session math is deterministic.
-                    onNavigateToMushafWithSession(startPage, startPage, target)
+                    onNavigateToMushafWithSession(resolvedStartPage, resolvedStartPage, resolvedTarget)
                 }) { Text(context.getString(com.quranreader.custom.R.string.dashboard_create_start)) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateSessionDialog = false }) { 
-                    Text(context.getString(com.quranreader.custom.R.string.common_cancel)) 
+                TextButton(onClick = { showCreateSessionDialog = false }) {
+                    Text(context.getString(com.quranreader.custom.R.string.common_cancel))
                 }
             }
         )
@@ -480,42 +556,33 @@ fun DashboardScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Glass / haze helpers — kept private to the dashboard because they
+// Translucent panel helpers — kept private to the dashboard because they
 // encode tuning specific to this screen's layout. The reader has its
 // own `PanelSurface` with different sizing / shadow tokens.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Frosted-glass surface backed by [Haze](https://github.com/chrisbanes/haze).
+ * Translucent panel surface used across the dashboard. v9.0 dropped
+ * the Haze-backed frosted-glass implementation in favour of plain
+ * Material 3 surfaces tinted at 75% alpha — they render identically
+ * on every API level (no Android 12+ `RenderEffect` requirement) and
+ * stop the dashboard chasing GPU work on every recomposition.
+ *
  * The panel renders as:
- *
- *  - Soft drop shadow (so the glass appears to float over the gradient).
+ *  - Soft drop shadow so the surface appears to float over the gradient.
  *  - Clipped to [shape].
- *  - `hazeChild(...)` samples the pixels behind the panel and blurs
- *    them with a `surfaceContainerHighest` tint at 55% alpha. The
- *    tint is theme-aware via `MaterialTheme.colorScheme`, so the same
- *    panel re-skins automatically across Zamrud / Teal / Amber /
- *    Indigo / Material You without any per-theme branching here.
- *  - Hairline border at 12% white-on-glass (light themes) or 8%
- *    on-surface (dark themes) for the Mac-style edge highlight.
- *
- * On Android < 12 (no `RenderEffect`) Haze falls back to a tinted
- * fill, so this composable still works everywhere; users on older
- * devices simply lose the live blur.
+ *  - Theme-aware fill (`surface` at 75% alpha) so the gradient + Rub
+ *    el Hizb pattern still bleed through subtly behind the chrome.
+ *  - Hairline border at 12% on-surface for a clean edge.
  */
 @Composable
 private fun GlassPanel(
-    hazeState: HazeState,
     shape: Shape,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    // `surfaceContainerHighest` doesn't exist on every M3 BOM — fall
-    // back to `surfaceVariant` blended with `surface` for older
-    // versions. Both produce a panel-friendly tint that adapts to
-    // the active theme.
-    val tint = cs.surface.copy(alpha = 0.55f)
+    val tint = cs.surface.copy(alpha = 0.75f)
     val borderColor = cs.onSurface.copy(alpha = 0.10f)
 
     Box(
@@ -523,19 +590,11 @@ private fun GlassPanel(
             .shadow(
                 elevation = 16.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.30f),
-                spotColor = Color.Black.copy(alpha = 0.40f),
+                ambientColor = Color.Black.copy(alpha = 0.20f),
+                spotColor = Color.Black.copy(alpha = 0.30f),
             )
             .clip(shape)
-            .hazeChild(
-                state = hazeState,
-                shape = shape,
-                style = HazeStyle(
-                    tint = tint,
-                    blurRadius = 36.dp,
-                    noiseFactor = 0.05f,
-                ),
-            )
+            .background(color = tint, shape = shape)
             .border(
                 width = 0.6.dp,
                 color = borderColor,

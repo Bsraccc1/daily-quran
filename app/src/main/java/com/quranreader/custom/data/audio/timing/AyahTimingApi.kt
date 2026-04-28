@@ -41,11 +41,18 @@ data class AyahTimingResponse(
  * Individual ayah timing record from quran.com.
  *
  * @property verseKey "{surah}:{ayah}" (e.g. "1:1")
+ * @property url full audio URL for this ayah (e.g.
+ *   `https://verses.quran.com/Alafasy/mp3/001001.mp3`). Only present
+ *   when the response is fetched with the verse-by-verse style;
+ *   nullable for safety. Used by [AudioUrlResolver] when the user has
+ *   picked a reciter from the dynamic quran.com catalogue (i.e. one
+ *   without a hard-coded everyayah formatPattern).
  */
 data class AyahTimingDto(
     @SerializedName("verse_key") val verseKey: String,
     @SerializedName("timestamp_from") val timestampFrom: Long?,
-    @SerializedName("timestamp_to") val timestampTo: Long?
+    @SerializedName("timestamp_to") val timestampTo: Long?,
+    @SerializedName("url") val url: String? = null
 ) {
     /** Parse "{surah}:{ayah}" into Pair<Int, Int>, or null if malformed. */
     fun parseSurahAyah(): Pair<Int, Int>? {

@@ -166,6 +166,12 @@
     <string name="mushaf_action_memorize">Hafalkan ayat</string>
     <string name="mushaf_action_bookmark_add">Tandai ayat</string>
     <string name="mushaf_action_bookmark_remove">Lepas tanda ayat</string>
+    <string name="mushaf_action_navigate">Navigasi</string>
+    <string name="mushaf_navigate_title">Navigasi Ke</string>
+    <string name="mushaf_navigate_tab_ayah">Surah &amp; Ayat</string>
+    <string name="mushaf_navigate_tab_page">Halaman</string>
+    <string name="mushaf_go_to_page_hint">Masukkan halaman (1–604)</string>
+    <string name="mushaf_go_to_page_go">Pergi</string>
     
     <!-- Session Complete -->
     <string name="session_complete_title">Sesi Selesai</string>

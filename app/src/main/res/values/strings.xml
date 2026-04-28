@@ -166,6 +166,12 @@
     <string name="mushaf_action_memorize">Memorize verse</string>
     <string name="mushaf_action_bookmark_add">Bookmark verse</string>
     <string name="mushaf_action_bookmark_remove">Remove verse bookmark</string>
+    <string name="mushaf_action_navigate">Navigate</string>
+    <string name="mushaf_navigate_title">Navigate To</string>
+    <string name="mushaf_navigate_tab_ayah">Surah &amp; Ayah</string>
+    <string name="mushaf_navigate_tab_page">Page</string>
+    <string name="mushaf_go_to_page_hint">Enter page (1–604)</string>
+    <string name="mushaf_go_to_page_go">Go</string>
     
     <!-- Session Complete -->
     <string name="session_complete_title">Session Complete</string>

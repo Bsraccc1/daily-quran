@@ -1,6 +1,6 @@
 # Daily Quran
 
-Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles all 604 Mushaf Madinah pages, an offline ayah-coordinate database for tap-to-highlight, and streams recitations on demand.
+Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles all 604 Mushaf Madinah pages, an offline ayah-coordinate database for tap-to-highlight, streams recitations from twelve reciters, and pulls the full quran.com translations catalogue on demand.
 
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://www.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-7F52FF.svg)](https://kotlinlang.org/)
@@ -38,21 +38,29 @@ Known bugs:
 
 ## Old Screenshots (not updated screenshot)
 
+> Screenshots reflect the v3.0.x layout. The v9.0 release (this branch) replaces the
+> frosted-glass panels with solid translucent surfaces and adds a vertical translation
+> slider to the reader; refreshed captures will land alongside the next tagged release.
+
 ### Mushaf Reader
 
 | Page 1 — Al-Fatihah (light) | Page 2 — Al-Baqarah (light) | Page 1 — Dark mode |
 | --- | --- | --- |
 | ![Mushaf page 1](screenshots/06_mushaf.png) | ![Mushaf page 2](screenshots/08_mushaf_p2.png) | ![Mushaf dark](screenshots/10_mushaf_dark.png) |
 
-The Mushaf renderer uses bundled transparent-background WebP images tinted at runtime, so the calligraphy follows the active theme without any "white card" flashing in dark mode.
+The Mushaf renderer uses bundled transparent-background WebP images tinted at runtime, so the calligraphy follows the active theme without any "white card" flashing in dark mode. Landscape rotation triggers a 1.18× zoom so the calligraphy fills the wider viewport.
 
-### Reader info panel
+### Reader chrome
 
-Single-tap a page to reveal the floating control bar — back, translation, memorize, page number, audio playback, and bookmark.
+Single-tap a page to reveal the floating control bar — back, translation, audio playback, memorize, **orientation lock**, and bookmark. Tapping a verse reveals the swipe-down panel with the verse context and two distinct **Surah & Ayah** / **Page** jump buttons.
 
 | Light info panel | Dark info panel |
 | --- | --- |
 | ![Info panel light](screenshots/07_mushaf_panel.png) | ![Info panel dark](screenshots/11_mushaf_panel_dark.png) |
+
+### Translation panel
+
+Tapping the translate button slides up a 45%-of-screen panel with the chosen edition's translation. The header chip flips between **Single** (just the highlighted ayah) and **Page** (every translated ayah on the current page, with the highlighted row accented). Tapping the edition chip opens the catalogue picker — pulled live from quran.com's `/api/v4/resources/translations` — where you can download, switch between, and delete editions.
 
 ### Navigation tabs
 
@@ -72,10 +80,14 @@ Single-tap a page to reveal the floating control bar — back, translation, memo
 
 - **Offline Mushaf reader** — 604 Madinah pages bundled as transparent WebP, ~53 MB, tinted with the active Material 3 colour scheme.
 - **Tap-to-highlight ayah** — long-press anywhere on a page to highlight the matching ayah using the bundled `ayahinfo.db` glyph rectangles.
-- **Reading sessions** — set a page target, track progress, finish or extend; the dashboard surfaces the active session and overall progress (page X of 604).
-- **Bookmarks** — page-level bookmarks with optional notes; one-tap toggle from the reader info panel.
+- **Vertical translation panel** — slides up to 45% of the screen instead of covering the page; toggle between Single (highlighted only) and Page (all verses on the page).
+- **Quran.com translations catalogue** — live-fetched picker with ~140 editions (Sahih International, Pickthall, Yusuf Ali, Hilali-Khan, Indonesian Ministry, Tafhim, Mubarakpuri, …); download / switch / delete per edition.
+- **Twelve recitations** — Abdul Basit (Murattal + Mujawwad), Mishary Alafasy, Sudais, Shuraim, Husary, Minshawi, Maher Al-Muaiqly, Saad Al-Ghamdi, Ajamy, Hudhaify, Bukhatir, all with verified everyayah audio + quran.com per-ayah timing sync where available.
+- **Reading sessions** — pick a Page range *or* an entire Juz from the dashboard; track progress, finish, or extend on the Sessions tab.
+- **Reader navigation chrome** — distinct **Surah & Ayah** vs **Page** jump buttons in the swipe-down panel; orientation toggle (Auto / Portrait / Landscape) in the swipe-up panel.
+- **Landscape mode** — the reader honours device rotation (no manifest portrait lock) and zooms the mushaf 1.18× to fill the wider viewport. Every other tab stays portrait.
+- **Bookmarks** — per-ayah and per-page bookmarks with optional notes; one-tap toggle from the reader info panel.
 - **Three navigation tabs** — Juz (30), Surah (114) with Makki/Madani classification, and Hizb (60).
-- **Translation overlay** — Sahih International (English) and Indonesian Ministry of Religious Affairs (Bahasa Indonesia), downloaded once and cached in Room.
 - **Streaming recitation** — Media3 ExoPlayer with on-disk cache (`SimpleCache` + `CacheDataSource`), per-surah download manager, ayah-level highlight sync from the quran.com timing API.
 - **Memorization (Hifz) mode** — overlay with repeat targets (3 / 5 / 10 / 20), persisted history, looping playback through the dedicated ExoPlayer.
 - **Five themes** — Zamrud Islami, Teal & Dusk, Amber Masjid, Indigo Malam, and Material You (Android 12+), each with light and dark variants.

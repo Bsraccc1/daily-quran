@@ -12,6 +12,8 @@ import com.quranreader.custom.data.memorization.MemorizationSession
 import com.quranreader.custom.data.memorization.MemorizationSessionDao
 import com.quranreader.custom.data.model.Bookmark
 import com.quranreader.custom.data.model.AyahCoordinate
+import com.quranreader.custom.data.model.Recitation
+import com.quranreader.custom.data.model.TranslationEdition
 import com.quranreader.custom.data.model.TranslationText
 
 @Database(
@@ -19,17 +21,21 @@ import com.quranreader.custom.data.model.TranslationText
         Bookmark::class,
         AyahCoordinate::class,
         TranslationText::class,
+        TranslationEdition::class,
+        Recitation::class,
         DownloadedSurah::class,
         AyahTiming::class,
         MemorizationSession::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun ayahCoordinateDao(): AyahCoordinateDao
     abstract fun translationDao(): TranslationDao
+    abstract fun translationEditionDao(): TranslationEditionDao
+    abstract fun recitationDao(): RecitationDao
     abstract fun downloadedSurahDao(): DownloadedSurahDao
     abstract fun ayahTimingDao(): AyahTimingDao
     abstract fun memorizationSessionDao(): MemorizationSessionDao
@@ -116,6 +122,83 @@ abstract class QuranDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS quran_texts")
+            }
+        }
+
+        /**
+         * v9 — Translations are now keyed by quran.com `translation_id`
+         * (`editionId`) instead of language code, so the table can hold
+         * multiple translations per language at once (Sahih + Pickthall +
+         * Yusuf Ali, all in `en`). Adds the column, backfills it for the
+         * two legacy editions ('en' → 131 Saheeh International,
+         * 'id' → 33 Indonesian Ministry), swaps the unique index, and
+         * creates the two new catalogue tables that back the picker.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Add editionId column (default 0 for unmapped legacy rows).
+                db.execSQL("ALTER TABLE translations ADD COLUMN editionId INTEGER NOT NULL DEFAULT 0")
+
+                // 2. Backfill legacy rows — 'en' was Saheeh International
+                //    (quran.com id 131) and 'id' was Indonesian Ministry
+                //    (quran.com id 33). Anything else stays at editionId=0
+                //    and the picker treats it as legacy / re-downloadable.
+                db.execSQL("UPDATE translations SET editionId = 131 WHERE languageCode = 'en'")
+                db.execSQL("UPDATE translations SET editionId = 33 WHERE languageCode = 'id'")
+
+                // 3. Swap the uniqueness from (surah, ayah, lang) to
+                //    (surah, ayah, editionId). Keep secondary indices for
+                //    legacy lang-based queries (widgets, daily-verse worker).
+                db.execSQL("DROP INDEX IF EXISTS index_translations_surahNumber_ayahNumber_languageCode")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_translations_surahNumber_ayahNumber_editionId ON translations (surahNumber, ayahNumber, editionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_translations_editionId ON translations (editionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_translations_languageCode ON translations (languageCode)")
+
+                // 4. Catalogue tables for the picker (cached editions /
+                //    recitations from quran.com so the UI stays offline-
+                //    readable after the first network refresh).
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS translation_editions (
+                        editionId INTEGER PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        authorName TEXT,
+                        languageName TEXT,
+                        slug TEXT,
+                        isDownloaded INTEGER NOT NULL DEFAULT 0,
+                        verseCount INTEGER NOT NULL DEFAULT 0,
+                        lastDownloadedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS recitations (
+                        recitationId INTEGER PRIMARY KEY NOT NULL,
+                        reciterName TEXT NOT NULL,
+                        style TEXT,
+                        translatedName TEXT,
+                        audioUrlBase TEXT
+                    )
+                """)
+
+                // 5. Seed the legacy editions so the picker shows
+                //    them as already-downloaded after the migration.
+                val now = System.currentTimeMillis()
+                db.execSQL("""
+                    INSERT OR REPLACE INTO translation_editions
+                        (editionId, name, authorName, languageName, slug, isDownloaded, verseCount, lastDownloadedAt)
+                    SELECT 131, 'Saheeh International', 'Saheeh International', 'english', 'saheeh-international',
+                           CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END,
+                           COUNT(*), $now
+                    FROM translations WHERE editionId = 131
+                """)
+                db.execSQL("""
+                    INSERT OR REPLACE INTO translation_editions
+                        (editionId, name, authorName, languageName, slug, isDownloaded, verseCount, lastDownloadedAt)
+                    SELECT 33, 'Indonesian Ministry of Religious Affairs', 'Indonesian Ministry', 'indonesian', 'id-indonesian',
+                           CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END,
+                           COUNT(*), $now
+                    FROM translations WHERE editionId = 33
+                """)
             }
         }
     }

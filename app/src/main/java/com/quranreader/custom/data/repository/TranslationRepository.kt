@@ -1,151 +1,254 @@
 package com.quranreader.custom.data.repository
 
 import android.content.Context
-import com.quranreader.custom.data.local.TranslationDao
-import com.quranreader.custom.data.model.TranslationText
+import android.util.Log
 import com.quranreader.custom.data.QuranInfo
+import com.quranreader.custom.data.local.AyahCoordinateDao
+import com.quranreader.custom.data.local.TranslationDao
+import com.quranreader.custom.data.local.TranslationEditionDao
+import com.quranreader.custom.data.model.TranslationEdition
+import com.quranreader.custom.data.model.TranslationText
+import com.quranreader.custom.data.remote.QuranComApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Translation data layer.
+ *
+ *  - Catalogue (which editions exist) comes from
+ *    [QuranComApi.listTranslations] and is mirrored into the
+ *    `translation_editions` Room table so the picker is offline-readable
+ *    after the first refresh.
+ *  - Verses come from [QuranComApi.fetchTranslation] and are written into
+ *    the existing `translations` table keyed by `editionId` (quran.com
+ *    `translation_id`). Multiple editions can coexist for the same
+ *    language — picking "Sahih" doesn't blow away "Pickthall".
+ *  - Per-page reads use the bundled `ayahinfo.db` glyph table to derive
+ *    exactly which (surah, ayah) pairs sit on the page, so the
+ *    translation panel only ever shows verses that actually appear on
+ *    the page the user is looking at.
+ */
 @Singleton
 class TranslationRepository @Inject constructor(
     private val translationDao: TranslationDao,
+    private val editionDao: TranslationEditionDao,
+    private val ayahCoordinateDao: AyahCoordinateDao,
+    private val quranComApi: QuranComApi,
     private val context: Context
 ) {
-    suspend fun isLanguageDownloaded(lang: String): Boolean {
-        return translationDao.getCountForLanguage(lang) > 0
-    }
-
-    suspend fun getTranslation(surah: Int, ayah: Int, lang: String): TranslationText? {
-        return translationDao.getTranslation(surah, ayah, lang)
-    }
-
-    suspend fun getTranslationsForRange(surah: Int, fromAyah: Int, toAyah: Int, lang: String): List<TranslationText> {
-        return translationDao.getTranslationsForRange(surah, fromAyah, toAyah, lang)
-    }
-
-    fun getTranslationsForSurah(surah: Int, lang: String): Flow<List<TranslationText>> {
-        return translationDao.getTranslationsForSurah(surah, lang)
-    }
+    // ── Edition catalogue ────────────────────────────────────────────────────
 
     /**
-     * Get translations for all ayahs on a specific page.
-     * Uses QuranInfo to determine which surahs/ayahs are on the page.
+     * Cached list of editions, observable so the picker re-renders
+     * automatically after [refreshEditionCatalogue] writes back.
      */
-    suspend fun getTranslationsForPage(page: Int, lang: String): List<TranslationText> {
-        val results = mutableListOf<TranslationText>()
+    fun observeEditions(): Flow<List<TranslationEdition>> = editionDao.observeAll()
 
-        // Find surah for this page
-        var currentSurah = 1
-        for (s in 1..114) {
-            if (QuranInfo.getStartPage(s) <= page) currentSurah = s
-            else break
-        }
-
-        // Check if next surah starts on this page
-        val surahsOnPage = mutableListOf(currentSurah)
-        for (s in (currentSurah + 1)..114) {
-            if (QuranInfo.getStartPage(s) == page) surahsOnPage.add(s)
-            else if (QuranInfo.getStartPage(s) > page) break
-        }
-
-        for (surah in surahsOnPage) {
-            val surahStartPage = QuranInfo.getStartPage(surah)
-            val nextSurahStartPage = if (surah < 114) QuranInfo.getStartPage(surah + 1) else 605
-            val totalAyahs = QuranInfo.getAyahCount(surah)
-            val pagesInSurah = (nextSurahStartPage - surahStartPage).coerceAtLeast(1)
-
-            val pageOffset = page - surahStartPage
-            val ayahsPerPage = (totalAyahs.toFloat() / pagesInSurah).toInt().coerceAtLeast(1)
-            val startAyah = (pageOffset * ayahsPerPage + 1).coerceIn(1, totalAyahs)
-            val endAyah = if (pageOffset == pagesInSurah - 1) totalAyahs
-                         else ((pageOffset + 1) * ayahsPerPage).coerceIn(startAyah, totalAyahs)
-
-            val translations = translationDao.getTranslationsForRange(surah, startAyah, endAyah, lang)
-            results.addAll(translations)
-        }
-
-        return results
-    }
+    fun observeInstalledEditions(): Flow<List<TranslationEdition>> = editionDao.observeInstalled()
 
     /**
-     * Download translation data from cdn.islamic.network API
-     * API: https://api.alquran.cloud/v1/quran/{edition}
-     * Editions: en.sahih (English), id.indonesian (Indonesian)
+     * Pull the latest editions from quran.com, merge with installed
+     * status from Room, and persist back. Network-only — caller should
+     * surface failure in the UI.
      */
-    suspend fun downloadTranslation(
-        lang: String,
-        onProgress: (Int, Int) -> Unit = { _, _ -> }
-    ): Boolean = withContext(Dispatchers.IO) {
+    suspend fun refreshEditionCatalogue(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val edition = when (lang) {
-                "en" -> "en.sahih"
-                "id" -> "id.indonesian"
-                else -> return@withContext false
+            val response = quranComApi.listTranslations()
+            val installedById = editionDao.listAll().associateBy { it.editionId }
+            val merged = response.translations.map { dto ->
+                val existing = installedById[dto.id]
+                TranslationEdition(
+                    editionId = dto.id,
+                    name = dto.name,
+                    authorName = dto.authorName,
+                    languageName = dto.languageName,
+                    slug = dto.slug,
+                    isDownloaded = existing?.isDownloaded ?: false,
+                    verseCount = existing?.verseCount ?: 0,
+                    lastDownloadedAt = existing?.lastDownloadedAt ?: 0L,
+                )
             }
-            val translationName = when (lang) {
-                "en" -> "Sahih International"
-                "id" -> "Indonesian Ministry of Religious Affairs"
-                else -> edition
-            }
-
-            val url = "https://api.alquran.cloud/v1/quran/$edition"
-            val response = URL(url).readText()
-            val json = org.json.JSONObject(response)
-            val data = json.getJSONObject("data")
-            val surahs = data.getJSONArray("surahs")
-
-            val totalAyahs = 6236
-            var processedAyahs = 0
-            val batch = mutableListOf<TranslationText>()
-
-            for (i in 0 until surahs.length()) {
-                val surah = surahs.getJSONObject(i)
-                val surahNumber = surah.getInt("number")
-                val ayahs = surah.getJSONArray("ayahs")
-
-                for (j in 0 until ayahs.length()) {
-                    val ayah = ayahs.getJSONObject(j)
-                    val ayahNumber = ayah.getInt("numberInSurah")
-                    val text = ayah.getString("text")
-
-                    batch.add(
-                        TranslationText(
-                            surahNumber = surahNumber,
-                            ayahNumber = ayahNumber,
-                            languageCode = lang,
-                            translationName = translationName,
-                            text = text
-                        )
-                    )
-
-                    processedAyahs++
-                    if (batch.size >= 100) {
-                        translationDao.insertAll(batch)
-                        batch.clear()
-                        onProgress(processedAyahs, totalAyahs)
-                    }
-                }
-            }
-
-            if (batch.isNotEmpty()) {
-                translationDao.insertAll(batch)
-                onProgress(processedAyahs, totalAyahs)
-            }
-
+            if (merged.isNotEmpty()) editionDao.upsertAll(merged)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "refreshEditionCatalogue failed", e)
             false
         }
     }
 
-    suspend fun getRandomAyah(lang: String): TranslationText? {
-        return translationDao.getRandomAyah(lang)
+    suspend fun getEdition(editionId: Int): TranslationEdition? = editionDao.getById(editionId)
+
+    // ── Reads (edition-aware) ────────────────────────────────────────────────
+
+    suspend fun isEditionInstalled(editionId: Int): Boolean {
+        return translationDao.getCountForEdition(editionId) > 0
+    }
+
+    suspend fun getTranslation(surah: Int, ayah: Int, editionId: Int): TranslationText? {
+        return translationDao.getByEdition(surah, ayah, editionId)
+    }
+
+    /**
+     * Translations for every (surah, ayah) actually present on [page],
+     * derived from `ayahinfo.db`. Falls back to the legacy estimation
+     * algorithm when ayahinfo has no rows (e.g. corrupted asset DB)
+     * so the panel still renders something instead of going blank.
+     */
+    suspend fun getTranslationsForPage(page: Int, editionId: Int): List<TranslationText> {
+        val ayahsOnPage = ayahsOnPage(page)
+        if (ayahsOnPage.isEmpty()) return emptyList()
+        // Group consecutive ayahs by surah so we hit the DAO once per
+        // surah-on-page (typically one or two surahs per page).
+        val resultsBySurah = ayahsOnPage
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, ayahs) -> ayahs.min() to ayahs.max() }
+
+        val out = mutableListOf<TranslationText>()
+        for ((surah, range) in resultsBySurah) {
+            val (from, to) = range
+            out.addAll(translationDao.getRangeByEdition(surah, from, to, editionId))
+        }
+        return out.sortedWith(compareBy({ it.surahNumber }, { it.ayahNumber }))
+    }
+
+    /**
+     * Resolve the (surah, ayah) pairs that actually appear on the
+     * given mushaf [page]. Uses the bundled glyph table when present;
+     * falls back to a coarse estimate otherwise.
+     */
+    private suspend fun ayahsOnPage(page: Int): List<Pair<Int, Int>> {
+        val coords = try {
+            ayahCoordinateDao.getCoordinatesForPage(page)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (coords.isNotEmpty()) {
+            return coords.map { it.surah to it.ayah }.distinct()
+        }
+        // Coarse fallback — average ayahs/page within a surah.
+        val pairs = mutableListOf<Pair<Int, Int>>()
+        var currentSurah = 1
+        for (s in 1..114) {
+            if (QuranInfo.getStartPage(s) <= page) currentSurah = s else break
+        }
+        val surahsOnPage = mutableListOf(currentSurah)
+        for (s in (currentSurah + 1)..114) {
+            if (QuranInfo.getStartPage(s) == page) surahsOnPage.add(s) else break
+        }
+        for (surah in surahsOnPage) {
+            val surahStart = QuranInfo.getStartPage(surah)
+            val nextStart = if (surah < 114) QuranInfo.getStartPage(surah + 1) else 605
+            val total = QuranInfo.getAyahCount(surah)
+            val span = (nextStart - surahStart).coerceAtLeast(1)
+            val perPage = (total.toFloat() / span).toInt().coerceAtLeast(1)
+            val offset = page - surahStart
+            val from = (offset * perPage + 1).coerceIn(1, total)
+            val to = if (offset == span - 1) total else ((offset + 1) * perPage).coerceIn(from, total)
+            for (a in from..to) pairs.add(surah to a)
+        }
+        return pairs
+    }
+
+    // ── Downloads ────────────────────────────────────────────────────────────
+
+    /**
+     * Stream every verse of [editionId] from quran.com into Room. Idempotent —
+     * re-running overwrites existing rows (`onConflict = REPLACE`) so a
+     * partial previous attempt is harmless. Reports `(downloaded,
+     * total)` periodically; total is fixed at 6,236 so the progress
+     * bar never spikes when the API returns slightly fewer rows.
+     */
+    suspend fun downloadEdition(
+        editionId: Int,
+        languageCode: String,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val response = quranComApi.fetchTranslation(editionId)
+            val editionMeta = editionDao.getById(editionId)
+                ?: TranslationEdition(
+                    editionId = editionId,
+                    name = response.meta?.translationName ?: "Edition $editionId",
+                    authorName = response.meta?.authorName,
+                    languageName = languageCode,
+                )
+            val translationName = editionMeta.name
+
+            val totalAyahs = 6236
+            val batch = mutableListOf<TranslationText>()
+            var processed = 0
+            for (verse in response.translations) {
+                val pair = verse.parseSurahAyah() ?: continue
+                batch.add(
+                    TranslationText(
+                        surahNumber = pair.first,
+                        ayahNumber = pair.second,
+                        editionId = editionId,
+                        languageCode = languageCode,
+                        translationName = translationName,
+                        text = verse.text.stripBasicHtml(),
+                    )
+                )
+                processed++
+                if (batch.size >= 200) {
+                    translationDao.insertAll(batch)
+                    batch.clear()
+                    onProgress(processed, totalAyahs)
+                }
+            }
+            if (batch.isNotEmpty()) {
+                translationDao.insertAll(batch)
+                onProgress(processed, totalAyahs)
+            }
+
+            // Persist installed status so the picker re-renders.
+            editionDao.upsertAll(
+                listOf(
+                    editionMeta.copy(
+                        isDownloaded = processed > 0,
+                        verseCount = processed,
+                        lastDownloadedAt = System.currentTimeMillis(),
+                    )
+                )
+            )
+            processed > 0
+        } catch (e: Exception) {
+            Log.w(TAG, "downloadEdition($editionId) failed", e)
+            false
+        }
+    }
+
+    /**
+     * Delete every verse for [editionId] and flag the edition as
+     * uninstalled. Catalogue row stays so the user can re-download
+     * later without another refresh.
+     */
+    suspend fun deleteEdition(editionId: Int) = withContext(Dispatchers.IO) {
+        translationDao.deleteEdition(editionId)
+        val current = editionDao.getById(editionId) ?: return@withContext
+        editionDao.upsertAll(listOf(current.copy(isDownloaded = false, verseCount = 0)))
+    }
+
+    // ── Random / daily-verse (legacy by language) ────────────────────────────
+
+    suspend fun getRandomAyahForEdition(editionId: Int): TranslationText? =
+        translationDao.getRandomAyahForEdition(editionId)
+
+    suspend fun getRandomAyah(lang: String): TranslationText? =
+        translationDao.getRandomAyah(lang)
+
+    /**
+     * quran.com returns translation text with a few markup
+     * artefacts (footnote `<sup>` tags, `<i>` italics). We strip the
+     * tags but keep the inner text — fancy rendering can come later.
+     */
+    private fun String.stripBasicHtml(): String = replace(HTML_TAG_REGEX, "").trim()
+
+    companion object {
+        private const val TAG = "TranslationRepo"
+        private val HTML_TAG_REGEX = Regex("<[^>]+>")
     }
 }

@@ -78,6 +78,7 @@ fun MushafImageRenderer(
      */
     onAyahTap: (surah: Int, ayah: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
+    fillContainer: Boolean = false,
     @Suppress("UNUSED_PARAMETER") fontScale: Float = 1.0f,
     viewModel: MushafImagePageViewModel = hiltViewModel(key = "mushaf_image_$pageNumber"),
 ) {
@@ -89,15 +90,22 @@ fun MushafImageRenderer(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
             .background(colors.background),
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
+        val pageModifier = if (fillContainer) {
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        } else {
+            Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .aspectRatio(IMAGE_WIDTH_PX.toFloat() / IMAGE_HEIGHT_PX.toFloat())
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        }
+        BoxWithConstraints(
+            modifier = pageModifier,
         ) {
             val density = LocalDensity.current
             val widthPx = with(density) { maxWidth.toPx() }
@@ -123,17 +131,25 @@ fun MushafImageRenderer(
                 colorFilter = ColorFilter.tint(colors.text, BlendMode.SrcIn),
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(pageNumber, glyphs.size) {
+                    // Scale factors are part of the keys so the gesture
+                    // detector re-arms after a layout change (e.g. an
+                    // orientation flip) — otherwise the suspended
+                    // `pointerInput` lambda would keep hit-testing
+                    // against the stale `scaleX`/`scaleY` captured
+                    // when the page first laid out.
+                    .pointerInput(pageNumber, glyphs.size, scaleX, scaleY) {
+                        // Hit-test on the canonical Compose tap detector. The
+                        // earlier custom `awaitEachGesture` ran on Final pass
+                        // and gated the tap branch on `up.isConsumed == false`,
+                        // which silently dropped taps whenever the up event
+                        // was marked consumed (e.g. by HorizontalPager's
+                        // gesture machinery). `detectTapGestures` already
+                        // coexists with parent draggables — it bails out as
+                        // soon as movement exceeds touch slop, so the pager
+                        // and the (landscape) LazyColumn keep handling drags
+                        // unobstructed.
                         detectTapGestures(
                             onTap = { offset ->
-                                // Hit-test first: a tap that lands on a
-                                // glyph means "highlight this verse",
-                                // a tap on margin / negative space falls
-                                // through to the existing info-panel
-                                // toggle. This gives users the
-                                // click-to-highlight behaviour without
-                                // breaking the established chrome
-                                // toggle UX.
                                 val hit = hitTest(glyphs, offset, scaleX, scaleY)
                                 if (hit != null) {
                                     onAyahTap(hit.suraNumber, hit.ayahNumber)

@@ -56,8 +56,17 @@
             android:exported="true"
             android:theme="@android:style/Theme.Material.NoActionBar"
             android:windowSoftInputMode="adjustResize"
-            android:screenOrientation="portrait"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden">
+            <!--
+                Orientation is no longer pinned in the manifest. The
+                MushafReaderScreen sets `requestedOrientation` at
+                runtime based on the user's UserPreferences.readerOrientation
+                preference (AUTO / PORTRAIT / LANDSCAPE), so the reader
+                can flip into a zoomed-in landscape view while every
+                other tab inherits the AUTO default. The DisposableEffect
+                in MushafReaderScreen restores the previous value on
+                exit so the rest of the app keeps working in portrait.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -236,9 +236,24 @@ fun QuranNavGraph(
                 ManageDownloadsScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onBrowseSurahs = {
+                        // Treat "Browse surahs" as a tab switch to the
+                        // Juz tab. We use the same nav arguments as the
+                        // bottom-bar `onItemClick` so the back stacks
+                        // for the two tabs (Settings and Juz) stay
+                        // independent. The previous implementation used
+                        // `popUpTo(Settings, inclusive = false)` which
+                        // left ManageDownloads still saved underneath
+                        // Settings; tapping the Settings tab again
+                        // would then `restoreState` straight into the
+                        // (now-stale) ManageDownloads sub-stack and the
+                        // Settings list itself was unreachable until
+                        // the user force-quit.
                         navController.navigate(Screen.Juz.route) {
-                            popUpTo(Screen.Settings.route) { inclusive = false }
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
                             launchSingleTop = true
+                            restoreState = true
                         }
                     }
                 )

@@ -8,8 +8,10 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,15 +20,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -35,8 +44,14 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenLockLandscape
+import androidx.compose.material.icons.filled.ScreenLockPortrait
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AssistChip
@@ -48,6 +63,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +77,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,22 +88,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quranreader.custom.R
+import kotlinx.coroutines.launch
 import com.quranreader.custom.data.QuranInfo
-import com.quranreader.custom.ui.components.TranslationBottomSheet
+import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_HEIGHT_PX
+import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_WIDTH_PX
+import com.quranreader.custom.data.preferences.ReaderOrientation
+import com.quranreader.custom.ui.components.TranslationEditionsDialog
+import com.quranreader.custom.ui.components.TranslationPanel
 import com.quranreader.custom.ui.components.mushaf.MushafImageRenderer
+import com.quranreader.custom.ui.screens.search.AyahSearchDialog
 import com.quranreader.custom.ui.theme.Motion
 import com.quranreader.custom.ui.viewmodel.AudioViewModel
 import com.quranreader.custom.ui.viewmodel.ReadingViewModel
 import com.quranreader.custom.ui.viewmodel.TranslationViewModel
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
 
 /**
  * Mushaf Reader Screen — Layer 2.
@@ -167,24 +189,74 @@ fun MushafReaderScreen(
     val audioState by audioViewModel.playbackState.collectAsStateWithLifecycle()
     val currentAudioAyah by audioViewModel.currentAyah.collectAsStateWithLifecycle()
 
-    // Translation state
-    val showTranslationSheet by
-        translationViewModel.showTranslationSheet.collectAsStateWithLifecycle()
+    // Translation state — edition-aware (v9+)
+    val showTranslationPanel by translationViewModel.showTranslationPanel.collectAsStateWithLifecycle()
     val translations by translationViewModel.translations.collectAsStateWithLifecycle()
     val translationLoading by translationViewModel.isLoading.collectAsStateWithLifecycle()
-    val translationLang by translationViewModel.translationLanguage.collectAsStateWithLifecycle()
-    val translationHighlight by
-        translationViewModel.highlightedAyahNumber.collectAsStateWithLifecycle()
+    val translationEditionId by translationViewModel.translationEditionId.collectAsStateWithLifecycle()
+    val translationScope by translationViewModel.translationScope.collectAsStateWithLifecycle()
+    val translationHighlight by translationViewModel.highlightedAyahNumber.collectAsStateWithLifecycle()
+    val isCurrentEditionInstalled by translationViewModel.isCurrentEditionInstalled.collectAsStateWithLifecycle()
+    val editions by translationViewModel.editions.collectAsStateWithLifecycle()
+    val downloadProgressMap by translationViewModel.downloadProgress.collectAsStateWithLifecycle()
+    val catalogueRefreshing by translationViewModel.catalogueRefreshing.collectAsStateWithLifecycle()
+    val readerOrientation by readingViewModel.readerOrientation.collectAsStateWithLifecycle()
+
+    val currentEdition = remember(editions, translationEditionId) {
+        editions.firstOrNull { it.editionId == translationEditionId }
+    }
 
     val currentPageNumber = pagerState.currentPage + 1
 
     // v3.0: state for memorization overlay
     var showMemorizeOverlay by remember { mutableStateOf(false) }
 
-    // Update current page when pager changes
+    // v9: editions catalogue dialog (download / pick / delete)
+    var showEditionsDialog by remember { mutableStateOf(false) }
+
+    // Unified navigate dialog (merges Surah+Ayah and Page jump).
+    var showNavigateDialog by remember { mutableStateOf(false) }
+
+    // Coroutine scope for pager scrollToPage() side effects from
+    // the jump dialogs. Tied to this composable so the scroll is
+    // cancelled if the user navigates away mid-animation.
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Update current page when pager changes — pushes into both view
+    // models so the translation panel reloads automatically.
     LaunchedEffect(pagerState.currentPage) {
         readingViewModel.setCurrentPage(pagerState.currentPage + 1)
-        translationViewModel.loadTranslationsForPage(pagerState.currentPage + 1)
+        translationViewModel.setCurrentPage(pagerState.currentPage + 1)
+    }
+
+    // Mirror the highlighted ayah into the translation VM whenever it
+    // changes, so the panel can either filter (HIGHLIGHTED_ONLY) or
+    // accent (ENTIRE_PAGE) the matching row.
+    LaunchedEffect(highlightedAyah?.surah, highlightedAyah?.ayah) {
+        translationViewModel.setHighlightedAyah(
+            highlightedAyah?.surah,
+            highlightedAyah?.ayah,
+        )
+    }
+
+    // Apply the user's orientation override at the Activity level. The
+    // reader is the only screen that supports landscape (the rest of
+    // the app is a portrait-locked phone UI by manifest). When the
+    // user backs out of the reader the DisposableEffect's onDispose
+    // restores the manifest default so the dashboard / sessions tabs
+    // don't accidentally inherit a landscape lock.
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    androidx.compose.runtime.DisposableEffect(readerOrientation, activity) {
+        val previous = activity?.requestedOrientation
+            ?: android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity?.requestedOrientation = when (readerOrientation) {
+            ReaderOrientation.AUTO -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+            ReaderOrientation.PORTRAIT -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ReaderOrientation.LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        onDispose {
+            activity?.requestedOrientation = previous
+        }
     }
 
     // Pre-highlight the requested ayah when entering via the "search by
@@ -275,61 +347,112 @@ fun MushafReaderScreen(
         readingViewModel.clearHighlight()
     }
 
-    // Haze captures pixels rendered *behind* it and exposes them to
-    // hazeChild() callers as a blurred backdrop. Both panels register
-    // as separate hazeChildren on the same source so the calligraphy
-    // outside their bounds remains sharp and tappable for the next
-    // ayah selection.
-    val hazeState = remember { HazeState() }
+    // Detect landscape — the page image (1024×1656 px) is much
+    // taller than the landscape viewport even at natural width,
+    // so each page is wrapped in a vertical lazy container to let the
+    // user scroll up/down through the page. We rely on the natural
+    // aspect-ratio overflow rather than a `.scale()` modifier,
+    // because `.scale()` is a visual-only transform that doesn't
+    // extend the scrollable layout bounds.
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    // Cache the pager's nested-scroll connection so a fresh instance
+    // isn't allocated on every recomposition. The connection is keyed
+    // off the pager state — it stays valid for the lifetime of this
+    // composable.
+    val pageNestedScrollConnection = remember(pagerState) {
+        androidx.compose.foundation.pager.PagerDefaults.pageNestedScrollConnection(
+            pagerState,
+            Orientation.Horizontal,
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Mushaf pages — registered as the haze source. The pager
-        // itself is NOT blurred; only the area inside each panel's
-        // shape is sampled and blurred by hazeChild().
+        // HorizontalPager for page-to-page navigation in both
+        // orientations (swipe left/right). In landscape the page
+        // image overflows vertically (1024×1656 aspect ratio at
+        // fillMaxWidth produces a height taller than the
+        // viewport), so each page is wrapped in a vertical lazy
+        // container to let the user scroll up/down through the page.
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .haze(state = hazeState),
+            modifier = Modifier.fillMaxSize(),
+            pageNestedScrollConnection = pageNestedScrollConnection,
         ) { page ->
-            // v3.0 / REQ-006: when audio is playing, override tap-highlight w/ audio-driven highlight
-            val audioDrivenHighlight = currentAudioAyah?.let { ayahInfo ->
-                if (audioState == com.quranreader.custom.data.audio.PlaybackState.Playing) {
-                    com.quranreader.custom.data.model.HighlightedAyah(
-                        page = page + 1,
-                        surah = ayahInfo.surah,
-                        ayah = ayahInfo.ayah,
-                        isBookmarked = false,
-                    )
-                } else null
+            // v3.0 / REQ-006: when audio is playing, override tap-highlight w/ audio-driven highlight.
+            // Remembered to avoid allocating a new HighlightedAyah on every
+            // recomposition (the audio state ticks frequently while playing).
+            val audioDrivenHighlight = remember(
+                page, audioState, currentAudioAyah?.surah, currentAudioAyah?.ayah,
+            ) {
+                currentAudioAyah?.let { ayahInfo ->
+                    if (audioState == com.quranreader.custom.data.audio.PlaybackState.Playing) {
+                        com.quranreader.custom.data.model.HighlightedAyah(
+                            page = page + 1,
+                            surah = ayahInfo.surah,
+                            ayah = ayahInfo.ayah,
+                            isBookmarked = false,
+                        )
+                    } else null
+                }
             }
-            // v5 mushaf image renderer — bundled transparent-bg WebP
-            // pages tinted with MaterialTheme.colorScheme.onSurface so
-            // light/dark themes both render correctly with no CDN
-            // download. Tap detection is driven by the bundled
-            // ayahinfo.db (per-glyph pixel coordinates).
-            //
-            // Gesture model:
-            //  - Tap on a glyph → set highlight (panels appear).
-            //  - Tap on margin / negative space → clear highlight
-            //    (panels disappear). This is the cleanest way to
-            //    dismiss without drilling into a separate "close"
-            //    affordance on the page itself.
-            //  - Long-press on a glyph → open ayah action dialog +
-            //    translation sheet (existing flow).
-            MushafImageRenderer(
-                pageNumber = page + 1,
-                highlightedAyah = audioDrivenHighlight ?: highlightedAyah,
-                onAyahLongPress = { s, a ->
-                    readingViewModel.onAyahTapped(page + 1, s, a)
-                    translationViewModel.setAyahHighlight(a)
-                },
-                onAyahTap = { s, a ->
-                    readingViewModel.setInitialHighlight(page + 1, s, a)
-                },
-                onSingleTap = { readingViewModel.clearHighlight() },
-                modifier = Modifier.fillMaxSize(),
-            )
+
+            // In landscape: LazyColumn lets the
+            // user scroll up/down through the page. We give the
+            // renderer an EXPLICIT height (screenWidth × image
+            // aspect ratio) so the page genuinely overflows the
+            // viewport — relying on `aspectRatio` alone gets
+            // constrained back to viewport height by intrinsic
+            // measurements. In portrait: no scroll needed.
+            if (isLandscape) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val pageHeightRatio = IMAGE_HEIGHT_PX.toFloat() / IMAGE_WIDTH_PX.toFloat()
+                    val landscapePageHeight = (maxWidth * pageHeightRatio)
+                        .coerceAtLeast(maxHeight + 1.dp)
+                    val listState = rememberLazyListState()
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        item(key = page) {
+                            MushafImageRenderer(
+                                pageNumber = page + 1,
+                                highlightedAyah = audioDrivenHighlight ?: highlightedAyah,
+                                onAyahLongPress = { s, a ->
+                                    readingViewModel.onAyahTapped(page + 1, s, a)
+                                    translationViewModel.setHighlightedAyah(s, a)
+                                    translationViewModel.openPanel()
+                                },
+                                onAyahTap = { s, a ->
+                                    readingViewModel.setInitialHighlight(page + 1, s, a)
+                                },
+                                onSingleTap = { readingViewModel.clearHighlight() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(landscapePageHeight),
+                                fillContainer = true,
+                            )
+                        }
+                    }
+                }
+            } else {
+                MushafImageRenderer(
+                    pageNumber = page + 1,
+                    highlightedAyah = audioDrivenHighlight ?: highlightedAyah,
+                    onAyahLongPress = { s, a ->
+                        readingViewModel.onAyahTapped(page + 1, s, a)
+                        translationViewModel.setHighlightedAyah(s, a)
+                        translationViewModel.openPanel()
+                    },
+                    onAyahTap = { s, a ->
+                        readingViewModel.setInitialHighlight(page + 1, s, a)
+                    },
+                    onSingleTap = { readingViewModel.clearHighlight() },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         // ── Slide-DOWN panel (top): verse context ─────────────────
@@ -354,11 +477,11 @@ fun MushafReaderScreen(
             // still rendering the panel but the user has already
             // swiped to a different page.
             TopInfoPanel(
-                hazeState = hazeState,
                 pageNumber = highlightedAyah?.page ?: currentPageNumber,
                 surahNumber = highlightedAyah?.surah ?: 1,
                 ayahNumber = highlightedAyah?.ayah ?: 1,
                 onClose = { readingViewModel.clearHighlight() },
+                onNavigate = { showNavigateDialog = true },
             )
         }
 
@@ -380,25 +503,52 @@ fun MushafReaderScreen(
         ) {
             val isPlaying = audioState == com.quranreader.custom.data.audio.PlaybackState.Playing
             BottomActionPanel(
-                hazeState = hazeState,
                 isBookmarked = highlightedAyahBookmarked,
                 isPlaying = isPlaying,
-                isTranslateOpen = showTranslationSheet,
+                isTranslateOpen = showTranslationPanel,
                 isMemorizeOpen = showMemorizeOverlay,
+                readerOrientation = readerOrientation,
                 onBack = onBack,
                 onBookmarkToggle = { readingViewModel.toggleAyahBookmark() },
                 onTranslateToggle = {
-                    val ayah = highlightedAyah?.ayah
-                    if (ayah != null) translationViewModel.setAyahHighlight(ayah)
-                    translationViewModel.toggleTranslationSheet()
+                    val highlight = highlightedAyah
+                    if (highlight != null) {
+                        translationViewModel.setHighlightedAyah(highlight.surah, highlight.ayah)
+                    }
+                    translationViewModel.togglePanel()
                 },
                 onAudioToggle = {
                     if (isPlaying) audioViewModel.togglePlayPause()
                     else audioViewModel.playPage(currentPageNumber)
                 },
                 onMemorizeToggle = { showMemorizeOverlay = true },
+                onOrientationCycle = { readingViewModel.cycleReaderOrientation() },
             )
         }
+
+        // Translation panel — slides up from the bottom, sits over
+        // the mushaf without dimming/blocking taps on the rest of
+        // the page. Capped at 45% of the parent height inside the
+        // composable itself.
+        TranslationPanel(
+            visible = showTranslationPanel,
+            translations = translations,
+            highlightedAyahNumber = translationHighlight,
+            highlightedSurahNumber = highlightedAyah?.surah,
+            scope = translationScope,
+            isLoading = translationLoading,
+            isEditionInstalled = isCurrentEditionInstalled,
+            currentEdition = currentEdition,
+            onScopeToggle = { translationViewModel.toggleScope() },
+            onEditionsClick = {
+                showEditionsDialog = true
+                translationViewModel.refreshCatalogue()
+            },
+            onDismiss = { translationViewModel.closePanel() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding(),
+        )
 
         // Snackbar — anchored above the bottom panel so a transient
         // error never gets clipped under the action chrome. The 96 dp
@@ -516,14 +666,39 @@ fun MushafReaderScreen(
         }
     }
 
-    // Translation Bottom Sheet
-    if (showTranslationSheet) {
-        TranslationBottomSheet(
-            translations = translations,
-            highlightedAyahNumber = translationHighlight,
-            isLoading = translationLoading,
-            currentLanguage = translationLang,
-            onDismiss = { translationViewModel.toggleTranslationSheet() },
+    // Editions catalogue dialog — opened from the chip in the
+    // translation panel header.
+    if (showEditionsDialog) {
+        TranslationEditionsDialog(
+            editions = editions,
+            selectedEditionId = translationEditionId,
+            downloadProgress = downloadProgressMap,
+            isCatalogueRefreshing = catalogueRefreshing,
+            onSelect = { edition ->
+                translationViewModel.setEdition(edition.editionId)
+                showEditionsDialog = false
+            },
+            onDownload = { edition -> translationViewModel.downloadEdition(edition) },
+            onDelete = { editionId -> translationViewModel.deleteEdition(editionId) },
+            onRefresh = { translationViewModel.refreshCatalogue() },
+            onDismiss = { showEditionsDialog = false },
+        )
+    }
+
+    // Unified navigate dialog — tabs for Surah+Ayah and Page.
+    if (showNavigateDialog) {
+        NavigateDialog(
+            currentPage = currentPageNumber,
+            onDismiss = { showNavigateDialog = false },
+            onAyahResult = { page, surah, ayah ->
+                showNavigateDialog = false
+                readingViewModel.setInitialHighlight(page, surah, ayah)
+                coroutineScope.launch { pagerState.scrollToPage((page - 1).coerceIn(0, 603)) }
+            },
+            onPageResult = { page ->
+                showNavigateDialog = false
+                coroutineScope.launch { pagerState.scrollToPage((page - 1).coerceIn(0, 603)) }
+            },
         )
     }
 
@@ -553,40 +728,42 @@ fun MushafReaderScreen(
 
 /**
  * Read-only context strip anchored to the top of the screen. Shows the
- * surah, the highlighted verse, the page number, and the juz. Single
- * close button on the leading edge clears the highlight (which also
- * dismisses the slide-up panel).
+ * surah, the highlighted verse, the page number, and the juz. DPI-safe
+ * symmetrical layout: close on the left, surah info centred, chips on
+ * the right. A single **Navigate** button opens the unified jump
+ * dialog (Surah+Ayah *or* Page tabs).
  *
  * Layout:
  *  - 280 ≤ width ≤ 480 dp, fills available width within those bounds.
  *  - 48 dp close button (Material a11y minimum).
  *  - Surah / ayah label takes a flexible weight so long surah names
  *    truncate with ellipsis instead of pushing the chips off-screen.
- *  - Page + Juz chips sit on the trailing edge in a single row; they
- *    wrap onto a second row only on the narrowest devices via the
- *    `breakpoint` flag computed from `BoxWithConstraints`.
+ *  - Page + Juz chips sit on the trailing edge; on compact screens
+ *    (< 360 dp) they wrap below the surah label and the Navigate
+ *    button sits centred at full width.
  */
 @Composable
 private fun TopInfoPanel(
-    hazeState: HazeState,
     pageNumber: Int,
     surahNumber: Int,
     ayahNumber: Int,
     onClose: () -> Unit,
+    onNavigate: () -> Unit,
 ) {
     val englishName = remember(surahNumber) { QuranInfo.getSurahEnglishName(surahNumber) }
     val juz = remember(pageNumber) { QuranInfo.getJuzForPage(pageNumber) }
 
     PanelSurface(
-        hazeState = hazeState,
         modifier = Modifier.fillMaxWidth(),
     ) { compact ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // ── Row 1: Close | Surah info | Chips ──────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -631,27 +808,46 @@ private fun TopInfoPanel(
 
                 if (!compact) {
                     Spacer(Modifier.size(8.dp))
-                    InfoChipRow(
-                        pageNumber = pageNumber,
-                        juz = juz,
-                    )
+                    InfoChipRow(pageNumber = pageNumber, juz = juz)
                 }
             }
 
-            // Narrow phones (< 360 dp) — the chips wrap onto a second
-            // line so the surah name still has room to breathe. We
-            // pre-decide via the BoxWithConstraints in PanelSurface so
-            // there's no measure pass thrash.
+            // Compact screens: chips on a second row
             if (compact) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 56.dp), // align under the title (close button + spacer)
+                        .padding(start = 56.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    InfoChipRow(
-                        pageNumber = pageNumber,
-                        juz = juz,
+                    InfoChipRow(pageNumber = pageNumber, juz = juz)
+                }
+            }
+
+            // ── Row 2: Single Navigate button (centred) ────────────
+            Surface(
+                onClick = onNavigate,
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                modifier = if (compact) Modifier.fillMaxWidth() else Modifier,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NearMe,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = stringResource(R.string.mushaf_action_navigate),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 1,
                     )
                 }
             }
@@ -722,32 +918,52 @@ private fun ContextChip(
  * the existing AudioService API), but the rest of the controls
  * operate on the selected verse.
  *
- * Five evenly-spaced 48 dp icon buttons fit comfortably on the
- * narrowest supported device (5" / 360 dp) and centre-justify on
- * tablets via `widthIn(max = 480.dp)`.
+ * Six evenly-spaced 48 dp icon buttons fit comfortably on the
+ * narrowest supported device (5" / 360 dp); the row is wrapped in
+ * `horizontalScroll` as a safety net for very small screens.
+ *
+ * The orientation toggle cycles AUTO → PORTRAIT → LANDSCAPE so the
+ * user can pin the reader into landscape (zoomed mushaf view) without
+ * flipping the system's global rotation lock.
  */
 @Composable
 private fun BottomActionPanel(
-    hazeState: HazeState,
     isBookmarked: Boolean,
     isPlaying: Boolean,
     isTranslateOpen: Boolean,
     isMemorizeOpen: Boolean,
+    readerOrientation: ReaderOrientation,
     onBack: () -> Unit,
     onBookmarkToggle: () -> Unit,
     onTranslateToggle: () -> Unit,
     onAudioToggle: () -> Unit,
     onMemorizeToggle: () -> Unit,
+    onOrientationCycle: () -> Unit,
 ) {
     PanelSurface(
-        hazeState = hazeState,
         modifier = Modifier.fillMaxWidth(),
-    ) { _ ->
-        Row(
-            modifier = Modifier
+    ) { compact ->
+        // 6 × 48dp icon buttons + spacing comfortably fits a 360dp
+        // screen but starts to crowd on `sw320dp` devices (e.g. small
+        // pre-Pixel handsets, foldable inner panels). Wrapping the
+        // row in `horizontalScroll` on the compact breakpoint lets
+        // the user pan past any clipped chrome instead of having
+        // touches eat each other; on standard-size phones the
+        // arrangement stays `SpaceEvenly` and never triggers the
+        // scroll because the row already fits.
+        val rowModifier = if (compact) {
+            Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+        }
+        Row(
+            modifier = rowModifier,
+            horizontalArrangement = if (compact) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PanelIconButton(
@@ -777,6 +993,10 @@ private fun BottomActionPanel(
                 active = isMemorizeOpen,
                 onClick = onMemorizeToggle,
             )
+            OrientationToggleButton(
+                orientation = readerOrientation,
+                onClick = onOrientationCycle,
+            )
             BookmarkIconButton(
                 isBookmarked = isBookmarked,
                 onClick = onBookmarkToggle,
@@ -785,62 +1005,85 @@ private fun BottomActionPanel(
     }
 }
 
+/**
+ * Cycles AUTO → PORTRAIT → LANDSCAPE. Icon swaps to communicate the
+ * *current* state, not the *next* — users tend to read the icon as
+ * "what am I locked into right now".
+ */
+@Composable
+private fun OrientationToggleButton(
+    orientation: ReaderOrientation,
+    onClick: () -> Unit,
+) {
+    val (icon, description) = when (orientation) {
+        ReaderOrientation.AUTO -> Icons.Default.ScreenRotation to "Orientation: Auto"
+        ReaderOrientation.PORTRAIT -> Icons.Default.ScreenLockPortrait to "Orientation: Portrait"
+        ReaderOrientation.LANDSCAPE -> Icons.Default.ScreenLockLandscape to "Orientation: Landscape"
+    }
+    PanelIconButton(
+        icon = icon,
+        contentDescription = description,
+        active = orientation != ReaderOrientation.AUTO,
+        onClick = onClick,
+    )
+}
+
 // ── Shared panel chrome ─────────────────────────────────────────────────────
 
 /**
- * Frosted-glass surface used by both panels. Wraps a `BoxWithConstraints`
- * so child content can adapt to a `compact` (< 360 dp) breakpoint
- * without a second measure pass. Width is clamped to the same band
- * the search dialog uses (`280..480 dp`) so chrome looks consistent
- * across the app.
+ * Translucent surface used by both reader panels. Replaces the
+ * previous Haze-backed frosted-glass effect with a regular Material 3
+ * surface tinted at 92% alpha — looks closer to a native Android panel
+ * and renders identically on every API level (no Android 12+
+ * `RenderEffect` requirement).
  *
+ * Wraps a `BoxWithConstraints` so child content can adapt to a
+ * `compact` (< 360 dp) breakpoint without a second measure pass. The
+ * width follows the shared [responsivePanelMaxWidth] tier table so
+ * phones and tablets all stay visually consistent — the panel never
+ * fills the full width of a 10" tablet (which would dwarf the
+ * mushaf), and on compact handsets it still spans 92% of the screen.
  * Height grows with content; min-height is enforced by the children
- * (touch targets are 48 dp). The 24 dp corner radius matches the
- * Material 3 expressive shape token used elsewhere in the reader.
+ * (touch targets are 48 dp). The inner Surface is centred horizontally
+ * so the panel hovers in the middle of wider screens instead of
+ * left-anchoring against the start edge.
  */
 @Composable
 private fun PanelSurface(
-    hazeState: HazeState,
     modifier: Modifier = Modifier,
     content: @Composable (compact: Boolean) -> Unit,
 ) {
-    BoxWithConstraints(modifier = modifier) {
-        // Cap the panel at min(92% of available width, 480 dp) and
-        // floor it at 280 dp. We read from BoxWithConstraints' scope —
-        // not LocalConfiguration — so the math is driven by the *real*
-        // parent constraint after status/navigation bars and the
-        // host's horizontal padding, which is what we actually want
-        // for sizing on foldables and split-screen layouts.
+    BoxWithConstraints(
+        modifier = modifier,
+        contentAlignment = Alignment.TopCenter,
+    ) {
         val available = maxWidth
-        val maxPanel = (available * 0.92f).coerceAtMost(480.dp)
+        val maxPanel = com.quranreader.custom.ui.components.responsivePanelMaxWidth(available)
         val compact = available < 360.dp
 
         val panelShape = RoundedCornerShape(24.dp)
-        val panelTint = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f)
-        Box(
+        Surface(
+            shape = panelShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            tonalElevation = 4.dp,
+            shadowElevation = 12.dp,
             modifier = Modifier
-                .widthIn(min = 280.dp.coerceAtMost(available), max = maxPanel)
+                .widthIn(
+                    min = com.quranreader.custom.ui.components.MIN_PANEL_WIDTH.coerceAtMost(available),
+                    max = maxPanel,
+                )
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
                 .shadow(
                     elevation = 12.dp,
                     shape = panelShape,
-                    ambientColor = Color.Black.copy(alpha = 0.4f),
-                    spotColor = Color.Black.copy(alpha = 0.5f),
+                    ambientColor = Color.Black.copy(alpha = 0.25f),
+                    spotColor = Color.Black.copy(alpha = 0.35f),
                 )
                 .clip(panelShape)
-                .hazeChild(
-                    state = hazeState,
-                    shape = panelShape,
-                    style = HazeStyle(
-                        tint = panelTint,
-                        blurRadius = 50.dp,
-                        noiseFactor = 0.04f,
-                    ),
-                )
                 .border(
                     width = 0.5.dp,
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                     shape = panelShape,
                 ),
         ) {
@@ -926,3 +1169,198 @@ private fun BookmarkIconButton(
     }
 }
 
+// ── Unified Navigate Dialog ────────────────────────────────────────────────
+
+/**
+ * Single dialog with two tabs: **Surah & Ayah** (opens the full
+ * [AyahSearchDialog] inline) and **Page** (numeric 1–604 input).
+ *
+ * DPI-adaptive: width = min(92% of window, 480 dp) ≥ 280 dp;
+ * height = min(85% of window, 640 dp). Renders identically from
+ * 5" phones to 12" tablets.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NavigateDialog(
+    currentPage: Int,
+    onDismiss: () -> Unit,
+    onAyahResult: (page: Int, surah: Int, ayah: Int) -> Unit,
+    onPageResult: (page: Int) -> Unit,
+) {
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var showAyahSearchDialog by remember { mutableStateOf(false) }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val dialogMaxWidth = com.quranreader.custom.ui.components.responsivePanelMaxWidth(maxWidth)
+
+            Surface(
+                modifier = Modifier
+                    .widthIn(
+                        min = com.quranreader.custom.ui.components.MIN_PANEL_WIDTH.coerceAtMost(maxWidth),
+                        max = dialogMaxWidth,
+                    )
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp)),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+            ) {
+                Column {
+                    // ── Title + close ─────────────────────────────
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 8.dp, top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NearMe,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.size(10.dp))
+                        Text(
+                            text = stringResource(R.string.mushaf_navigate_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.mushaf_panel_close),
+                            )
+                        }
+                    }
+
+                    // ── Tab row ───────────────────────────────────
+                    val tabTitles = listOf(
+                        stringResource(R.string.mushaf_navigate_tab_ayah),
+                        stringResource(R.string.mushaf_navigate_tab_page),
+                    )
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ) {
+                        tabTitles.forEachIndexed { index, title ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                text = {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = if (selectedTab == index) FontWeight.Bold
+                                            else FontWeight.Medium,
+                                    )
+                                },
+                            )
+                        }
+                    }
+
+                    // ── Tab content ───────────────────────────────
+                    when (selectedTab) {
+                        0 -> {
+                            // Surah & Ayah tab — opens AyahSearchDialog
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                )
+                                Text(
+                                    text = stringResource(R.string.search_ayah_subtitle),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Button(
+                                    onClick = { showAyahSearchDialog = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.size(8.dp))
+                                    Text(stringResource(R.string.search_ayah_title))
+                                }
+                            }
+                        }
+                        1 -> {
+                            // Page tab — simple numeric input
+                            var pageInput by rememberSaveable {
+                                mutableStateOf(currentPage.toString())
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = pageInput,
+                                    onValueChange = { value ->
+                                        pageInput = value.filter { it.isDigit() }.take(3)
+                                    },
+                                    singleLine = true,
+                                    label = {
+                                        Text(stringResource(R.string.mushaf_go_to_page_hint))
+                                    },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number,
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Button(
+                                    onClick = {
+                                        val target = pageInput.toIntOrNull()?.coerceIn(1, 604)
+                                        if (target != null) onPageResult(target)
+                                    },
+                                    enabled = pageInput.toIntOrNull()?.let { it in 1..604 } == true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(stringResource(R.string.mushaf_go_to_page_go))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Surah & Ayah picker — opens on top of the navigate dialog
+    if (showAyahSearchDialog) {
+        AyahSearchDialog(
+            onDismiss = { showAyahSearchDialog = false },
+            onResult = { page, surah, ayah ->
+                showAyahSearchDialog = false
+                onAyahResult(page, surah, ayah)
+            },
+        )
+    }
+}

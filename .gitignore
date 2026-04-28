@@ -113,6 +113,7 @@ RESPONSIVE_DESIGN.md
 # Build / dev artifacts left in repo root
 dump*.xml
 ui_dump.xml
+ui_dump*.xml
 quran_dump.xml
 v3-*.png
 v4-*.png
@@ -128,6 +129,20 @@ d.xml
 d_settings.xml
 nul
 tmp/
+
+# Agentic verification scratch (screenshots + UI dumps produced by the
+# emulator smoke-test flow). These are useful while a session is in
+# progress but should never be committed to the repo.
+.tmp_*
+_emu_*.png
+_step*.png
+_ls*.png
+_ui.xml
+u.xml
+ui.xml
+tmp_ui_mapper.json
+screenshot_*.png
+screenshots/multi/
 
 # Python tooling cache used by tools/build_mushaf_pages.py
 tools/.cache/

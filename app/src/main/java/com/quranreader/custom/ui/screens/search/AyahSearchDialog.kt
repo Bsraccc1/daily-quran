@@ -122,12 +122,15 @@ fun AyahSearchDialog(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            val dialogMaxWidth = (maxWidth * 0.92f).coerceAtMost(480.dp)
+            val dialogMaxWidth = com.quranreader.custom.ui.components.responsivePanelMaxWidth(maxWidth)
             val dialogMaxHeight = (maxHeight * 0.85f).coerceAtMost(640.dp)
 
             Surface(
                 modifier = Modifier
-                    .widthIn(min = 280.dp, max = dialogMaxWidth)
+                    .widthIn(
+                        min = com.quranreader.custom.ui.components.MIN_PANEL_WIDTH.coerceAtMost(maxWidth),
+                        max = dialogMaxWidth,
+                    )
                     .heightIn(max = dialogMaxHeight)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp)),

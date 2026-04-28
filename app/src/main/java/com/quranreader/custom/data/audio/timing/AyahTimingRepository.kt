@@ -66,22 +66,42 @@ class AyahTimingRepository @Inject constructor(
 }
 
 /**
- * Maps internal reciterId to quran.com recitation_id.
+ * Maps internal `ReciterConfig.id` (the slug used in DataStore /
+ * AudioService) to quran.com `recitation_id` (the integer used by
+ * [AyahTimingApi]). The mapping is consulted *only* for highlight
+ * sync — playback URLs come from each reciter's everyayah base, not
+ * from quran.com — so an unmapped entry just disables sync for that
+ * reciter while audio still plays correctly.
  *
- * quran.com recitation IDs are integers; common ones (verified from quran.com `recitations` API):
- *  - 1 = AbdulBaset AbdulSamad (Murattal)
- *  - 7 = Mishary Rashid Alafasy
- *  - 11 = Mahmoud Khalil Al-Husary
- *  - 6 = Abdurrahman As-Sudais (some recitations use ID 6 or 12)
- *
- * For unmapped reciters, repository returns empty list -> sync engine falls back to
- * MediaItem-level highlight.
+ * Verified IDs (quran.com `/api/v4/resources/recitations`):
+ *   1  AbdulBaset AbdulSamad (Murattal)
+ *   2  AbdulBaset AbdulSamad (Mujawwad)
+ *   3  Abdurrahmaan As-Sudais
+ *   6  Mahmoud Khalil Al-Husary (Mu'allim)
+ *   7  Mishari Rashid al-Afasy
+ *   8  Mahmoud Khalil Al-Husary (Mujawwad)
+ *   9  Mohamed Siddiq al-Minshawi (Mujawwad)
+ *  10  Mohamed Siddiq al-Minshawi (Murattal)
+ *  11  Sa'ud Ash-Shuraym
  */
 object ReciterRecitationMap {
     private val map = mapOf(
         "abdul_basit_murattal" to "1",
+        "abdul_basit_mujawwad" to "2",
+        "abdurrahman_as_sudais" to "3",
+        "mahmoud_husary" to "6",
         "mishary_alafasy" to "7",
-        "abdurrahman_as_sudais" to "11"
+        "minshawi_murattal" to "10",
+        "saud_al_shuraim" to "11",
+        // Reciters without a confirmed quran.com timing — playback
+        // works (everyayah audio) but per-ayah highlight falls back
+        // to MediaItem-level sync. Keep their entries here as an
+        // explicit `null` so the table stays exhaustive.
+        "maher_al_muaiqly" to null,
+        "saad_al_ghamdi" to null,
+        "ahmed_al_ajamy" to null,
+        "ali_al_hudhaify" to null,
+        "salah_bukhatir" to null,
     )
 
     fun recitationIdFor(reciterId: String): String? = map[reciterId]

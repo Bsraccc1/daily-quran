@@ -14,6 +14,24 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 enum class DisplayMode { LIGHT, DARK, SYSTEM }
 
 /**
+ * Whether the translation panel renders a single verse (the
+ * highlighted one only) or the entire page's worth of verses with
+ * the highlighted ayah accented inside the list. Mirrors the
+ * "Translation scope" toggle in the swipe-up reader panel.
+ */
+enum class TranslationScope { HIGHLIGHTED_ONLY, ENTIRE_PAGE }
+
+/**
+ * Reader orientation override. AUTO follows the device sensor
+ * (which itself respects the user's system rotation lock); the
+ * other two pin the reader regardless of how the phone is held.
+ * Surfaced as a toggle in the swipe-up panel so users can lock to
+ * landscape for the zoomed-in view without flipping their device's
+ * global rotation lock.
+ */
+enum class ReaderOrientation { AUTO, PORTRAIT, LANDSCAPE }
+
+/**
  * A named reading session. Multiple sessions can coexist.
  * Stored as a flat list in DataStore (serialized manually — no Gson dependency needed).
  */
@@ -60,6 +78,25 @@ class UserPreferences @Inject constructor(
 
         // ── Translation ────────────────────────────────────────────────────
         private val TRANSLATION_LANGUAGE_KEY  = stringPreferencesKey("translation_language")
+        // v9: edition picked from the quran.com catalogue. Defaults to
+        // 131 (Saheeh International) which maps from the legacy 'en'
+        // download via MIGRATION_8_9.
+        private val TRANSLATION_EDITION_KEY   = intPreferencesKey("translation_edition_id")
+        // Translation scope: "highlighted" or "page" (matches
+        // [TranslationScope] enum values, lowercase). Defaults to
+        // "page" so the panel feels like the previous behaviour
+        // until the user picks otherwise.
+        private val TRANSLATION_SCOPE_KEY     = stringPreferencesKey("translation_scope")
+        // Whether the translation panel is currently visible. The
+        // reader binds to this so swiping up shows / hides the panel
+        // and the choice survives configuration changes.
+        private val TRANSLATION_PANEL_OPEN    = booleanPreferencesKey("translation_panel_open")
+        // Reader orientation override. Stored as the enum name.
+        private val READER_ORIENTATION_KEY    = stringPreferencesKey("reader_orientation")
+        // Selected quran.com recitation_id. Falls back to 0 meaning
+        // "use the legacy ReciterConfig list" so existing users keep
+        // hearing whoever they had picked before the picker rewrite.
+        private val SELECTED_RECITATION_ID_KEY = intPreferencesKey("selected_recitation_id")
 
         // ── Reminders & Daily Verse ────────────────────────────────────────
         private val REMINDER_ENABLED_KEY      = booleanPreferencesKey("reminder_enabled")
@@ -237,6 +274,59 @@ class UserPreferences @Inject constructor(
     // ── Translation Language ───────────────────────────────────────────────
     val translationLanguage: Flow<String> = dataStore.data.map { it[TRANSLATION_LANGUAGE_KEY] ?: "en" }
     suspend fun setTranslationLanguage(lang: String) = dataStore.edit { it[TRANSLATION_LANGUAGE_KEY] = lang }
+
+    /**
+     * Quran.com `translation_id` of the currently selected edition.
+     * Defaults to 131 (Saheeh International) — the same edition the
+     * legacy 'en' download mapped to in MIGRATION_8_9, so users
+     * upgrading from v8 see continuity instead of an empty picker.
+     */
+    val translationEditionId: Flow<Int> = dataStore.data.map { it[TRANSLATION_EDITION_KEY] ?: 131 }
+    suspend fun setTranslationEditionId(editionId: Int) = dataStore.edit {
+        it[TRANSLATION_EDITION_KEY] = editionId
+    }
+
+    /**
+     * "highlighted" → only the user-tapped ayah's translation shows;
+     * "page" → every translated ayah on the current page shows with the
+     * highlighted ayah accented. Defaults to "page".
+     */
+    val translationScope: Flow<TranslationScope> = dataStore.data.map { prefs ->
+        when (prefs[TRANSLATION_SCOPE_KEY]) {
+            "highlighted" -> TranslationScope.HIGHLIGHTED_ONLY
+            else -> TranslationScope.ENTIRE_PAGE
+        }
+    }
+    suspend fun setTranslationScope(scope: TranslationScope) = dataStore.edit {
+        it[TRANSLATION_SCOPE_KEY] = if (scope == TranslationScope.HIGHLIGHTED_ONLY) "highlighted" else "page"
+    }
+
+    val isTranslationPanelOpen: Flow<Boolean> = dataStore.data.map { it[TRANSLATION_PANEL_OPEN] ?: false }
+    suspend fun setTranslationPanelOpen(open: Boolean) = dataStore.edit {
+        it[TRANSLATION_PANEL_OPEN] = open
+    }
+
+    val readerOrientation: Flow<ReaderOrientation> = dataStore.data.map { prefs ->
+        when (prefs[READER_ORIENTATION_KEY]) {
+            "PORTRAIT" -> ReaderOrientation.PORTRAIT
+            "LANDSCAPE" -> ReaderOrientation.LANDSCAPE
+            else -> ReaderOrientation.AUTO
+        }
+    }
+    suspend fun setReaderOrientation(orientation: ReaderOrientation) = dataStore.edit {
+        it[READER_ORIENTATION_KEY] = orientation.name
+    }
+
+    /**
+     * Quran.com `recitation_id` of the currently selected reciter.
+     * 0 sentinels "use the legacy hard-coded list" so users
+     * upgrading from v8 still hear whoever they had previously
+     * selected via [selectedReciter].
+     */
+    val selectedRecitationId: Flow<Int> = dataStore.data.map { it[SELECTED_RECITATION_ID_KEY] ?: 0 }
+    suspend fun setSelectedRecitationId(id: Int) = dataStore.edit {
+        it[SELECTED_RECITATION_ID_KEY] = id
+    }
 
     // ── Reminders ──────────────────────────────────────────────────────────
     val reminderEnabled: Flow<Boolean> = dataStore.data.map { it[REMINDER_ENABLED_KEY] ?: false }
