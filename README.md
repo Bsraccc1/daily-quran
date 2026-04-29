@@ -1,7 +1,9 @@
 # Daily Quran
 
-Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles all 604 Mushaf Madinah pages, an offline ayah-coordinate database for tap-to-highlight, streams recitations from twelve reciters, and pulls the full quran.com translations catalogue on demand.
+Android Quran reader built with Jetpack Compose and Material 3. Ships all 604 Mushaf Madinah pages, an offline ayah-coordinate database for tap-to-highlight, twelve reciters for streaming or cached playback, and the full quran.com translations catalogue.
 
+[![Android CI](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-debug.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-debug.yml)
+[![Release](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-release.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://www.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-7F52FF.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
@@ -10,37 +12,18 @@ Modern Android Quran reader built with Jetpack Compose and Material 3. Bundles a
 
 ---
 
-To Do :
-- Add translations for each verse
-- Display only the translation of the currently highlighted verse; for the translation download interface, activate it when the translation button is clicked, and display a complete list of available translations from the API, such as from quran.com and others
-- The translation interface should not cover the entire screen, but rather appear as a vertical slider
-- Add an option to display only the highlighted verse, or all verses
-- Translate on every page; if a page starts at 1 and ends at 7, display only 1–7 if the user selects all verses,
-- if the user selects verse 6, display only the translation of verse 6
-- Add more reciters to the audio
-- New Quran layout type
-- Ensure all user interfaces function across all phone screen resolutions (DPI)
-- Add home page session management, which can be based on a specific juz or page
-- Add landscape mode support; when the phone is in landscape mode, the Quran reader will be zoomed in for easier reading
-- Replace all Mac blur effects in the source code with Gaussian Blur for better aesthetics
-- Users can switch surahs via the swipe-down interface in the Quran reader
-- Add landscape and portrait orientation toggle buttons in the swipe-up interface in the Quran reader
-- Add distinct button interfaces in the swipe-down interface for navigation option 1 (surah and verse) and option 2 (page)
-- Updated the screenshot preview in readme.md
+## To do
 
-Known bugs:
-- Audio download interface: after clicking “Browse Surah,” users cannot click “Settings” again
-- Session progress updates only occur when clicking “Continue Reading,” not when actually switching to the next page to update progress in session management
-  (consider adding a delay of about 5 seconds to ensure the user has scrolled and is reading on the new page)
-- User interface (UI) positioning is not optimal on other devices such as phones, etc.
-- UI positioning is poor on other devices, such as phones.
+- New Quran layout type (single-page vs dual-page spread)
+- Update screenshot previews in this README
 
+## Known bugs
 
-## Old Screenshots (not updated screenshot)
+- Audio download interface: tapping "Browse Surah" blocks subsequent taps on "Settings" until the panel is dismissed
 
-> Screenshots reflect the v3.0.x layout. The v9.0 release (this branch) replaces the
-> frosted-glass panels with solid translucent surfaces and adds a vertical translation
-> slider to the reader; refreshed captures will land alongside the next tagged release.
+## Screenshots
+
+> Captures below are from v3.0.x. The v9.0 layout replaces frosted-glass panels with solid translucent surfaces and adds the vertical translation slider. Updated screenshots will ship with the next tagged release.
 
 ### Mushaf Reader
 
@@ -91,8 +74,11 @@ Tapping the translate button slides up a 45%-of-screen panel with the chosen edi
 - **Streaming recitation** — Media3 ExoPlayer with on-disk cache (`SimpleCache` + `CacheDataSource`), per-surah download manager, ayah-level highlight sync from the quran.com timing API.
 - **Memorization (Hifz) mode** — overlay with repeat targets (3 / 5 / 10 / 20), persisted history, looping playback through the dedicated ExoPlayer.
 - **Five themes** — Zamrud Islami, Teal & Dusk, Amber Masjid, Indigo Malam, and Material You (Android 12+), each with light and dark variants.
-- **Bilingual UI** — English and Bahasa Indonesia, switchable from Settings without an app restart on most screens.
+- **Session complete splash** — full-screen overlay with Gaussian blur backdrop (GPU `RenderEffect` on API 31+, software box blur on older devices), adaptive layout for portrait and landscape.
+- **Auto-save** — periodic auto-save of reading progress with a floating indicator; session state survives process death via DataStore.
+- **Bilingual UI** — English and Bahasa Indonesia, switchable from Settings.
 - **Home-screen widget** — `QuranWidgetProvider` shows reading progress at a glance.
+- **CI/CD** — GitHub Actions builds every push, publishes tagged releases with APK to [Releases](https://github.com/Bsraccc1/daily-quran/releases).
 
 ---
 
@@ -194,7 +180,7 @@ When audio is playing, the highlight switches to an audio-driven `HighlightedAya
 
 ### Reading sessions
 
-`ReadingViewModel` owns a single `SessionState` machine — `IDLE`, `INPUT_PENDING`, `ACTIVE`, `COMPLETE` — persisted in DataStore so the dashboard can resume the active session across launches. The Mushaf reader observes session state to auto-show the "Session complete" sheet when `pagesReadInSession >= sessionTargetPages`.
+`ReadingViewModel` owns a single `SessionState` machine (`IDLE`, `INPUT_PENDING`, `ACTIVE`, `COMPLETE`) persisted in DataStore so the dashboard can resume the active session across launches. When `pagesReadInSession >= sessionTargetPages`, the reader shows a full-screen `SessionCompleteSplash` overlay with a Gaussian blur backdrop, reading stats, and continue/close actions. The blur uses GPU `RenderEffect` on API 31+ and a software two-pass box blur on older devices.
 
 ### Audio
 
