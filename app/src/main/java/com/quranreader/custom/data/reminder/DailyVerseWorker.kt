@@ -29,8 +29,18 @@ class DailyVerseWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         try {
+            // Pick a random ayah from the user's first downloaded
+            // translation (falls back to the bundled English/Indonesian
+            // edition IDs when nothing is downloaded yet).
             val lang = userPreferences.translationLanguage.first()
-            val translation = translationRepository.getRandomAyah(lang)
+            val activeIds = userPreferences.activeTranslationIds.first()
+            val downloadedIds = translationRepository.getDownloadedTranslationIds()
+            val candidateIds = (activeIds.filter { it in downloadedIds })
+                .ifEmpty { downloadedIds }
+                .ifEmpty { if (lang == "id") listOf(33) else listOf(131) }
+            val translation = candidateIds.firstNotNullOfOrNull {
+                translationRepository.getRandomAyah(it)
+            }
             
             if (translation == null) {
                 return Result.success()

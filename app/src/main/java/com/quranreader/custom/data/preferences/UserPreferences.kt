@@ -60,6 +60,12 @@ class UserPreferences @Inject constructor(
 
         // ── Translation ────────────────────────────────────────────────────
         private val TRANSLATION_LANGUAGE_KEY  = stringPreferencesKey("translation_language")
+        // Active translation editions (quran.com IDs) shown in the side panel,
+        // serialized as a comma-separated list of ints. Empty means "fall back
+        // to the bundled edition for the user's preferred language".
+        private val ACTIVE_TRANSLATION_IDS_KEY = stringPreferencesKey("active_translation_ids")
+        // "highlighted" or "all_on_page" — controls what the panel shows.
+        private val TRANSLATION_DISPLAY_MODE_KEY = stringPreferencesKey("translation_display_mode")
 
         // ── Reminders & Daily Verse ────────────────────────────────────────
         private val REMINDER_ENABLED_KEY      = booleanPreferencesKey("reminder_enabled")
@@ -237,6 +243,33 @@ class UserPreferences @Inject constructor(
     // ── Translation Language ───────────────────────────────────────────────
     val translationLanguage: Flow<String> = dataStore.data.map { it[TRANSLATION_LANGUAGE_KEY] ?: "en" }
     suspend fun setTranslationLanguage(lang: String) = dataStore.edit { it[TRANSLATION_LANGUAGE_KEY] = lang }
+
+    /**
+     * Quran.com translation IDs the user has selected to display in the
+     * reader's side panel. Empty list = "use the bundled default for
+     * the current [translationLanguage]".
+     */
+    val activeTranslationIds: Flow<List<Int>> = dataStore.data.map { prefs ->
+        prefs[ACTIVE_TRANSLATION_IDS_KEY]
+            ?.split(',')
+            ?.mapNotNull { it.trim().toIntOrNull() }
+            ?: emptyList()
+    }
+    suspend fun setActiveTranslationIds(ids: List<Int>) = dataStore.edit {
+        it[ACTIVE_TRANSLATION_IDS_KEY] = ids.joinToString(",")
+    }
+
+    /**
+     * "highlighted" → only the currently highlighted ayah is shown in
+     * the side panel. "all_on_page" → every ayah on the visible page.
+     * Defaults to "highlighted".
+     */
+    val translationDisplayMode: Flow<String> = dataStore.data.map { prefs ->
+        prefs[TRANSLATION_DISPLAY_MODE_KEY] ?: "highlighted"
+    }
+    suspend fun setTranslationDisplayMode(mode: String) = dataStore.edit {
+        it[TRANSLATION_DISPLAY_MODE_KEY] = mode
+    }
 
     // ── Reminders ──────────────────────────────────────────────────────────
     val reminderEnabled: Flow<Boolean> = dataStore.data.map { it[REMINDER_ENABLED_KEY] ?: false }

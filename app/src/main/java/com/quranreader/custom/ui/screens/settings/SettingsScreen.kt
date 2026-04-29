@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onNavigateToManageDownloads: () -> Unit = {},
     onNavigateToMemorizationHistory: () -> Unit = {},
+    onNavigateToManageTranslations: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -285,6 +286,19 @@ fun SettingsScreen(
                     title = "Manage Audio Downloads",
                     subtitle = "View + delete downloaded surah audio",
                     onClick = onNavigateToManageDownloads
+                )
+            }
+        }
+
+        // ── Card: Translations ───────────────────────────────────────────────
+        item {
+            SettingsCard {
+                NavRow(
+                    icon = Icons.Default.Translate,
+                    iconTint = MaterialTheme.colorScheme.secondary,
+                    title = "Manage Translations",
+                    subtitle = "Browse + download translations from quran.com",
+                    onClick = onNavigateToManageTranslations
                 )
             }
         }

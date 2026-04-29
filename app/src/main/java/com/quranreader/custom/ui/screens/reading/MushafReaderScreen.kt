@@ -75,7 +75,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quranreader.custom.R
 import com.quranreader.custom.data.QuranInfo
-import com.quranreader.custom.ui.components.TranslationBottomSheet
+import com.quranreader.custom.ui.components.TranslationSidePanel
 import com.quranreader.custom.ui.components.mushaf.MushafImageRenderer
 import com.quranreader.custom.ui.theme.Motion
 import com.quranreader.custom.ui.viewmodel.AudioViewModel
@@ -172,7 +172,8 @@ fun MushafReaderScreen(
         translationViewModel.showTranslationSheet.collectAsStateWithLifecycle()
     val translations by translationViewModel.translations.collectAsStateWithLifecycle()
     val translationLoading by translationViewModel.isLoading.collectAsStateWithLifecycle()
-    val translationLang by translationViewModel.translationLanguage.collectAsStateWithLifecycle()
+    val translationDisplayMode by
+        translationViewModel.displayMode.collectAsStateWithLifecycle()
     val translationHighlight by
         translationViewModel.highlightedAyahNumber.collectAsStateWithLifecycle()
 
@@ -516,16 +517,17 @@ fun MushafReaderScreen(
         }
     }
 
-    // Translation Bottom Sheet
-    if (showTranslationSheet) {
-        TranslationBottomSheet(
-            translations = translations,
-            highlightedAyahNumber = translationHighlight,
-            isLoading = translationLoading,
-            currentLanguage = translationLang,
-            onDismiss = { translationViewModel.toggleTranslationSheet() },
-        )
-    }
+    // Translation Side Panel — vertical slider on the trailing edge
+    // that does not cover the page. Replaces the previous bottom sheet.
+    TranslationSidePanel(
+        visible = showTranslationSheet,
+        translations = translations,
+        highlightedAyahNumber = translationHighlight,
+        isLoading = translationLoading,
+        displayMode = translationDisplayMode,
+        onDisplayModeChange = { translationViewModel.setDisplayMode(it) },
+        onDismiss = { translationViewModel.closePanel() },
+    )
 
     // v3.0 / REQ-008: Memorization (Hifz) overlay
     if (showMemorizeOverlay) {

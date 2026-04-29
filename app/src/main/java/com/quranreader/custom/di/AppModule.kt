@@ -43,7 +43,8 @@ object AppModule {
             QuranDatabase.MIGRATION_4_5,
             QuranDatabase.MIGRATION_5_6,
             QuranDatabase.MIGRATION_6_7,
-            QuranDatabase.MIGRATION_7_8
+            QuranDatabase.MIGRATION_7_8,
+            QuranDatabase.MIGRATION_8_9
         )
         .fallbackToDestructiveMigration()
         .build()

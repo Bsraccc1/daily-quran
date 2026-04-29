@@ -34,6 +34,7 @@ import com.quranreader.custom.ui.screens.memorization.MemorizationHistoryScreen
 import com.quranreader.custom.ui.screens.reading.MushafReaderScreen
 import com.quranreader.custom.ui.screens.session.SessionManagementScreen
 import com.quranreader.custom.ui.screens.settings.SettingsScreen
+import com.quranreader.custom.ui.screens.translations.TranslationManagerScreen
 import com.quranreader.custom.ui.viewmodel.SettingsViewModel
 
 // ── Route definitions ────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object ManageDownloads : Screen("manage_downloads") // audio downloads
     object MemorizationHistory : Screen("memorization_history")
+    object ManageTranslations : Screen("manage_translations")
 }
 
 // ── Bottom navigation tab definitions ────────────────────────────────────────
@@ -227,7 +229,17 @@ fun QuranNavGraph(
                     },
                     onNavigateToMemorizationHistory = {
                         navController.navigate(Screen.MemorizationHistory.route)
+                    },
+                    onNavigateToManageTranslations = {
+                        navController.navigate(Screen.ManageTranslations.route)
                     }
+                )
+            }
+
+            // ── Settings sub-screen: Manage Translations ─────────────────
+            composable(Screen.ManageTranslations.route) {
+                TranslationManagerScreen(
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
 

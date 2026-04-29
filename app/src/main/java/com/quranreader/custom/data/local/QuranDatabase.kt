@@ -23,7 +23,7 @@ import com.quranreader.custom.data.model.TranslationText
         AyahTiming::class,
         MemorizationSession::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {
@@ -116,6 +116,59 @@ abstract class QuranDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS quran_texts")
+            }
+        }
+
+        /**
+         * v9: extend `translations` to support multiple editions per
+         * language. The previous schema keyed uniqueness on
+         * `(surahNumber, ayahNumber, languageCode)`, which forced one
+         * translation per language. v9 keys uniqueness on
+         * `translationId` (matches a quran.com resource ID) and adds
+         * `authorName` / `slug` columns. Existing rows are migrated
+         * to translationId 131 (Sahih, English) or 33 (Indonesian
+         * Ministry) based on their old languageCode.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Build a fresh table with the v9 shape, copy existing
+                // data into it, then swap names. This avoids ALTER
+                // TABLE limitations around index uniqueness changes.
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS translations_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        surahNumber INTEGER NOT NULL,
+                        ayahNumber INTEGER NOT NULL,
+                        translationId INTEGER NOT NULL,
+                        languageCode TEXT NOT NULL,
+                        translationName TEXT NOT NULL,
+                        authorName TEXT NOT NULL DEFAULT '',
+                        slug TEXT NOT NULL DEFAULT '',
+                        text TEXT NOT NULL
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO translations_new
+                        (id, surahNumber, ayahNumber, translationId, languageCode,
+                         translationName, authorName, slug, text)
+                    SELECT id, surahNumber, ayahNumber,
+                           CASE languageCode
+                               WHEN 'en' THEN 131
+                               WHEN 'id' THEN 33
+                               ELSE 131
+                           END AS translationId,
+                           languageCode,
+                           translationName,
+                           '' AS authorName,
+                           '' AS slug,
+                           text
+                    FROM translations
+                """)
+                db.execSQL("DROP TABLE translations")
+                db.execSQL("ALTER TABLE translations_new RENAME TO translations")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_translations_surahNumber_ayahNumber_translationId ON translations (surahNumber, ayahNumber, translationId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_translations_translationId ON translations (translationId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_translations_languageCode ON translations (languageCode)")
             }
         }
     }
