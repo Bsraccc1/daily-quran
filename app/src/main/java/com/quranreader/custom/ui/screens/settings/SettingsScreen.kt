@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.R
 import com.quranreader.custom.data.audio.Reciters
+import com.quranreader.custom.data.preferences.AutoSaveMode
 import com.quranreader.custom.ui.MainActivity
 import com.quranreader.custom.ui.components.animated.ExpandableSection
 import com.quranreader.custom.ui.viewmodel.AudioViewModel
@@ -235,9 +237,20 @@ fun SettingsScreen(
         // ── Card: Reading ────────────────────────────────────────────────────
         item {
             val continueReadingLimit by viewModel.continueReadingLimit.collectAsState()
+            val autoSaveSeconds by viewModel.autoSavePageSeconds.collectAsState()
+            val autoSaveMode by viewModel.autoSaveMode.collectAsState()
+            val autoSavePageCount by viewModel.autoSavePageCount.collectAsState()
             var limitInput by remember { mutableStateOf(continueReadingLimit.toString()) }
+            var autoSaveInput by remember { mutableStateOf(autoSaveSeconds.toString()) }
+            var autoSavePagesInput by remember { mutableStateOf(autoSavePageCount.toString()) }
             LaunchedEffect(continueReadingLimit) {
                 limitInput = continueReadingLimit.toString()
+            }
+            LaunchedEffect(autoSaveSeconds) {
+                autoSaveInput = autoSaveSeconds.toString()
+            }
+            LaunchedEffect(autoSavePageCount) {
+                autoSavePagesInput = autoSavePageCount.toString()
             }
             SettingsCard {
                 ExpandableSection(
@@ -275,6 +288,126 @@ fun SettingsScreen(
                                 Text("Current: $continueReadingLimit pages")
                             }
                         )
+
+                        Spacer(Modifier.height(16.dp))
+                        Divider()
+                        Spacer(Modifier.height(16.dp))
+
+                        // ── Auto-save trigger ────────────────────────
+                        // Two parallel modes — BY_TIME (legacy dwell
+                        // timer) and BY_PAGES (commit every N flips).
+                        // The picker swaps which numeric field is
+                        // visible so the user only edits the value
+                        // that's actually driving their reader.
+                        Text(
+                            stringResource(R.string.settings_autosave_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.settings_autosave_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        // Mode picker — FilterChip pair instead of a
+                        // SegmentedButton because FilterChip ships
+                        // out of experimental and matches the rest
+                        // of the settings card aesthetic (tiny
+                        // capsules, not buttons).
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = autoSaveMode == AutoSaveMode.BY_TIME,
+                                onClick = { viewModel.setAutoSaveMode(AutoSaveMode.BY_TIME) },
+                                label = {
+                                    Text(stringResource(R.string.settings_autosave_mode_by_time))
+                                },
+                                leadingIcon = if (autoSaveMode == AutoSaveMode.BY_TIME) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                } else null,
+                            )
+                            FilterChip(
+                                selected = autoSaveMode == AutoSaveMode.BY_PAGES,
+                                onClick = { viewModel.setAutoSaveMode(AutoSaveMode.BY_PAGES) },
+                                label = {
+                                    Text(stringResource(R.string.settings_autosave_mode_by_pages))
+                                },
+                                leadingIcon = if (autoSaveMode == AutoSaveMode.BY_PAGES) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                } else null,
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+
+                        // Show only the field for the active mode —
+                        // editing a hidden field would be confusing
+                        // (user thinks they changed the trigger but
+                        // the chip in the reader keeps using the
+                        // other one).
+                        when (autoSaveMode) {
+                            AutoSaveMode.BY_TIME -> OutlinedTextField(
+                                value = autoSaveInput,
+                                onValueChange = {
+                                    autoSaveInput = it.filter { c -> c.isDigit() }
+                                    val value = autoSaveInput.toIntOrNull()
+                                    if (value != null && value in 1..60) {
+                                        viewModel.setAutoSavePageSeconds(value)
+                                    }
+                                },
+                                label = {
+                                    Text(stringResource(R.string.settings_autosave_seconds_label))
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                supportingText = {
+                                    Text(
+                                        stringResource(
+                                            R.string.settings_autosave_seconds_current,
+                                            autoSaveSeconds,
+                                        )
+                                    )
+                                }
+                            )
+                            AutoSaveMode.BY_PAGES -> OutlinedTextField(
+                                value = autoSavePagesInput,
+                                onValueChange = {
+                                    autoSavePagesInput = it.filter { c -> c.isDigit() }
+                                    val value = autoSavePagesInput.toIntOrNull()
+                                    if (value != null && value in 1..50) {
+                                        viewModel.setAutoSavePageCount(value)
+                                    }
+                                },
+                                label = {
+                                    Text(stringResource(R.string.settings_autosave_pages_label))
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                supportingText = {
+                                    Text(
+                                        stringResource(
+                                            R.string.settings_autosave_pages_current,
+                                            autoSavePageCount,
+                                        )
+                                    )
+                                }
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                     }
                 }

@@ -5,10 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -92,29 +91,85 @@ fun MushafImageRenderer(
         modifier = modifier
             .background(colors.background),
     ) {
-        val pageModifier = if (fillContainer) {
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        } else {
-            Modifier
+        // The bundled WebPs are 1024 × 1656 (≈0.618 aspect ratio).
+        // The previous renderer used `fillMaxWidth().aspectRatio()`,
+        // which clamps the page to the screen *width* even on tall
+        // portrait phones — a 1080 × 2400 device leaves ≈30 % of
+        // the vertical space empty above and below the calligraphy,
+        // which is the "too small" symptom the user flagged.
+        //
+        // The contain-fit math below sizes the page to whichever of
+        // the available width or height is the binding constraint, so
+        // the calligraphy fills the screen the same way the reference
+        // mushaf does — edge-to-edge on tall phones, width-bound on
+        // landscape / wide form-factors, never distorted because the
+        // ratio is preserved either way.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val outerW = maxWidth
+            val outerH = maxHeight
+            val pageRatio = IMAGE_WIDTH_PX.toFloat() / IMAGE_HEIGHT_PX.toFloat()
+            val widthByHeight = outerH * pageRatio
+            // Slight inflation so the WebP's internal whitespace
+            // (Mushaf Madinah pages ship with ≈ 30 px horizontal /
+            // 80 px vertical padding around the calligraphy) is
+            // pushed off-screen, making the calligraphy itself feel
+            // closer to the reference printed mushaf the user
+            // compared us against. The zoom is **only safe in the
+            // height-bound branch** where the layout has spare
+            // horizontal room — there the 1.06x pushes the WebP's
+            // top/bottom decorative borders past the status / nav
+            // insets without ever cropping a glyph.
+            //
+            // In the width-bound branch (landscape, foldable inner,
+            // tablets, narrow WSA / split-screen windows where the
+            // window is wider than 0.618 of its height) the page is
+            // already exactly as wide as the window. Multiplying
+            // its width by 1.06 would push the left- and right-most
+            // calligraphy off-screen — that's the bug the user
+            // reported with the cut-off chip + clipped Arabic on a
+            // narrow window. Forcing zoom = 1f there keeps every
+            // glyph visible regardless of form factor.
+            val pageWidth: androidx.compose.ui.unit.Dp
+            val pageHeight: androidx.compose.ui.unit.Dp
+            if (fillContainer) {
+                // Landscape reader uses the parent-supplied size as-is
+                // (it computes a height that already respects the
+                // page aspect ratio in MushafReaderScreen).
+                pageWidth = outerW
+                pageHeight = outerH
+            } else if (widthByHeight <= outerW) {
+                // Height is the binding constraint — the typical case
+                // on portrait phones. Zoom is safe: spare width
+                // absorbs the horizontal expansion, vertical
+                // overflow pushes WebP padding off-screen.
+                val zoom = 1.06f
+                pageWidth = widthByHeight * zoom
+                pageHeight = outerH * zoom
+            } else {
+                // Width is the binding constraint — landscape, tablets,
+                // foldable inner panels, narrow WSA / split-screen.
+                // Zoom would clip calligraphy at the edges, so we
+                // render at exact fit and accept the slightly larger
+                // WebP padding around the text.
+                pageWidth = outerW
+                pageHeight = outerW / pageRatio
+            }
+
+            val pageModifier = Modifier
                 .align(Alignment.Center)
-                .fillMaxWidth()
-                .aspectRatio(IMAGE_WIDTH_PX.toFloat() / IMAGE_HEIGHT_PX.toFloat())
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        }
-        BoxWithConstraints(
-            modifier = pageModifier,
-        ) {
-            val density = LocalDensity.current
-            val widthPx = with(density) { maxWidth.toPx() }
-            val heightPx = with(density) { maxHeight.toPx() }
-            // Image is laid out FillBounds so the draw rectangle exactly
-            // matches our BoxWithConstraints — scale factors are simple
-            // ratios with no centring offsets to compensate for.
-            val scaleX = widthPx / IMAGE_WIDTH_PX
-            val scaleY = heightPx / IMAGE_HEIGHT_PX
+                .size(width = pageWidth, height = pageHeight)
+
+            BoxWithConstraints(
+                modifier = pageModifier,
+            ) {
+                val density = LocalDensity.current
+                val widthPx = with(density) { maxWidth.toPx() }
+                val heightPx = with(density) { maxHeight.toPx() }
+                // Image is laid out FillBounds so the draw rectangle exactly
+                // matches our BoxWithConstraints — scale factors are simple
+                // ratios with no centring offsets to compensate for.
+                val scaleX = widthPx / IMAGE_WIDTH_PX
+                val scaleY = heightPx / IMAGE_HEIGHT_PX
 
             // The page image itself. AsyncImage caches the decoded bitmap
             // in Coil's memory cache, so swiping back to a recently-viewed
@@ -199,6 +254,7 @@ fun MushafImageRenderer(
                         }
                     }
                 }
+            }
             }
         }
 

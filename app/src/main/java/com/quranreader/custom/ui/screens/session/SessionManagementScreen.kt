@@ -1,6 +1,5 @@
 package com.quranreader.custom.ui.screens.session
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.quranreader.custom.R
 import com.quranreader.custom.data.preferences.ReadingSession
+import com.quranreader.custom.ui.components.session.CreateSessionDialog
 import com.quranreader.custom.ui.viewmodel.SessionViewModel
 
 /**
@@ -89,14 +89,19 @@ fun SessionManagementScreen(
                         isActive = session.id == activeSessionId,
                         onActivate = {
                             viewModel.activateSession(session)
-                            // Land on the user's actual progress within
-                            // the session — `startPage + pagesRead` —
-                            // not the anchor page itself, so re-opening
-                            // an in-progress session resumes where the
-                            // user left off. The limit math still keys
-                            // off the anchor page passed separately.
-                            val resumePage = (session.startPage + session.pagesRead)
-                                .coerceIn(1, 604)
+                            // Land on the *last page the user actually
+                            // read* — `startPage + pagesRead - 1` — so a
+                            // session that finished its 10th page on
+                            // page 10 resumes on page 10, not page 11.
+                            // pagesRead==0 (untouched session) falls back
+                            // to the anchor page itself. The limit math
+                            // still keys off `startPage` and `targetPages`
+                            // passed separately.
+                            val resumePage = if (session.pagesRead > 0) {
+                                (session.startPage + session.pagesRead - 1).coerceIn(1, 604)
+                            } else {
+                                session.startPage.coerceIn(1, 604)
+                            }
                             onStartReading(resumePage, session.startPage, session.targetPages)
                         },
                         onRename = { showRenameDialog = session },
@@ -119,80 +124,27 @@ fun SessionManagementScreen(
         }
     }
 
-    // ── Create Session Dialog ─────────────────────────────────────────────────
+    // ── Create Session Dialog ───────────────────────────────────────────────
+    // Shared with the Dashboard's New-Session button so users get the
+    // same Page/Juz toggle, name field, and inclusive range hint no
+    // matter where they tap "+". The Session-tab variant just adds
+    // the session to the list and does not navigate (the FAB is for
+    // organising sessions, not starting them).
     if (showCreateDialog) {
-        var nameInput by remember { mutableStateOf("Session ${sessions.size + 1}") }
-        var targetInput by remember { mutableStateOf("10") }
-        var startFromCurrent by remember { mutableStateOf(true) }
-        var customPageInput by remember { mutableStateOf(lastPage.toString()) }
-
-        AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
-            title = { Text("New Reading Session") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text("Session Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = targetInput,
-                        onValueChange = { targetInput = it.filter { c -> c.isDigit() } },
-                        label = { Text("Target Pages") },
-                        supportingText = { Text("Total pages to read in this session") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { startFromCurrent = !startFromCurrent }
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Checkbox(
-                            checked = startFromCurrent,
-                            onCheckedChange = null,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "Start from current page (Page $lastPage)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (!startFromCurrent) {
-                        OutlinedTextField(
-                            value = customPageInput,
-                            onValueChange = { customPageInput = it.filter { c -> c.isDigit() } },
-                            label = { Text("Start Page (1-604)") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        CreateSessionDialog(
+            initialPage = lastPage,
+            sessionCount = sessions.size,
+            confirmLabel = context.getString(R.string.dashboard_create),
+            onDismiss = { showCreateDialog = false },
+            onConfirm = { name, startPage, targetPages ->
+                viewModel.createSession(
+                    name = name,
+                    startPage = startPage,
+                    targetPages = targetPages,
+                )
+                showCreateDialog = false
             },
-            confirmButton = {
-                Button(onClick = {
-                    val target = targetInput.toIntOrNull()?.coerceIn(1, 604) ?: 10
-                    val startPage = if (startFromCurrent) lastPage
-                    else customPageInput.toIntOrNull()?.coerceIn(1, 604) ?: lastPage
-                    
-                    viewModel.createSession(
-                        name = nameInput.ifBlank { "Session ${sessions.size + 1}" },
-                        startPage = startPage,
-                        targetPages = target
-                    )
-                    showCreateDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") }
-            }
         )
     }
 

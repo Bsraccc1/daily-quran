@@ -177,6 +177,9 @@
     <string name="session_complete_title">Sesi Selesai</string>
     <string name="session_complete_pages">%1$d halaman dibaca</string>
     <string name="session_complete_time">%1$d menit</string>
+    <string name="session_complete_subtitle">Bagus — rangkaian membaca kamu terjaga.</string>
+    <string name="session_complete_pages_label">Halaman</string>
+    <string name="session_complete_minutes_label">Menit</string>
     <string name="session_continue_reading">Lanjutkan Membaca</string>
     
     <!-- Reading Session -->
@@ -203,6 +206,30 @@
     <string name="dashboard_start_from_current">Mulai dari halaman saat ini (Halaman %1$d)</string>
     <string name="dashboard_start_page">Halaman Mulai (1-604)</string>
     <string name="dashboard_create_start">Buat &amp; Mulai</string>
+    <string name="dashboard_create">Buat</string>
+    <!-- Ringkasan rentang halaman inklusif untuk dialog buat-sesi
+         dan lembar auto-stop. "Halaman 1–10 (10 halaman)". -->
+    <string name="dashboard_pages_range_summary">Halaman %1$d–%2$d (%3$d halaman)</string>
+    <string name="dashboard_juz_label">Nomor Juz (1–30)</string>
+
+    <!-- Indikator auto-simpan pembaca (chip panel slide-down) -->
+    <string name="mushaf_autosave_counting">%1$d dtk</string>
+    <string name="mushaf_autosave_counting_pages">%1$d hlm</string>
+    <string name="mushaf_autosave_saved">Tersimpan</string>
+    <string name="mushaf_autosave_idle">Tersimpan</string>
+    <string name="mushaf_autosave_content_description">Indikator auto-simpan</string>
+    <!-- Pengaturan → Baca: auto-simpan -->
+    <string name="settings_autosave_title">Auto-simpan</string>
+    <string name="settings_autosave_description">Kapan pembaca menyimpan progresmu. Pilih timer dwell (menyimpan setelah kamu diam di satu halaman) atau ambang jumlah halaman (menyimpan setiap N flip).</string>
+    <string name="settings_autosave_mode_by_time">Berdasar waktu</string>
+    <string name="settings_autosave_mode_by_pages">Berdasar halaman</string>
+    <string name="settings_autosave_seconds_label">Detik (1-60)</string>
+    <string name="settings_autosave_seconds_current">Saat ini: %1$d dtk</string>
+    <string name="settings_autosave_pages_label">Halaman (1-50)</string>
+    <string name="settings_autosave_pages_current">Saat ini: setiap %1$d halaman</string>
+    <!-- Alias lama agar referensi yang masih memakai kunci lama tetap resolve. -->
+    <string name="settings_autosave_label">@string/settings_autosave_seconds_label</string>
+    <string name="settings_autosave_current">@string/settings_autosave_seconds_current</string>
 
     <!-- Search → Cari Ayat -->
     <string name="search_chip_ayah">Ayat</string>

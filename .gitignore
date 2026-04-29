@@ -91,18 +91,31 @@ test_results/
 # Debug logs
 debug_*.log
 
-# Agent / qoder support files (not part of project)
-.qoder/
-.kiro/
-.taskmaster/
-.devin/
-.claude/
+# Agent / IDE support files (not part of project)
+.agent/
 .agents/
+.claude/
+.codebuddy/
 .codex/
+.continue/
+.cursor/
+.devin/
+.gemini/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.taskmaster/
+.trae/
+.windsurf/
+.github/prompts/
 skills-lock.json
 qoder-reset/
 claude-frontend-skills/
 AGENTS.md
+
+# Test screenshots captured during development
+screenshots/
 CLEANUP_SUMMARY.md
 FIXES_APPLIED.md
 UPDATE_SUMMARY.md

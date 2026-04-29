@@ -10,8 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -28,30 +26,17 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.data.QuranInfo
-import com.quranreader.custom.data.QuranNavigationData
 import com.quranreader.custom.ui.components.CircularReadingProgress
+import com.quranreader.custom.ui.components.session.CreateSessionDialog
 import com.quranreader.custom.ui.screens.search.AyahSearchDialog
 import com.quranreader.custom.ui.viewmodel.ReadingViewModel
 import com.quranreader.custom.ui.viewmodel.SessionViewModel
 import kotlin.math.ceil
 import kotlin.math.sqrt
-
-/**
- * Anchor strategy for the Home → Create-Session dialog. PAGE keeps
- * the legacy "start at page X, run for Y pages" flow; JUZ derives
- * both fields from the canonical juz boundary table — picking
- * Juz 7 means pages 122..141, no manual math required.
- */
-private enum class SessionBasis(val label: String) {
-    PAGE("Page"),
-    JUZ("Juz");
-}
 
 /**
  * Dashboard Screen - Shows circular progress and session controls
@@ -257,8 +242,18 @@ fun DashboardScreen(
                         Button(
                             onClick = {
                                 sessionViewModel.activateSession(activeSession)
-                                val resumePage = (activeSession.startPage + activeSession.pagesRead)
-                                    .coerceIn(1, 604)
+                                // Resume on the *last page actually read*
+                                // (`startPage + pagesRead - 1`), not the
+                                // page after — so a 10-page session that
+                                // finished page 10 resumes on page 10.
+                                // Falls back to the anchor page when the
+                                // session is brand new (pagesRead == 0).
+                                val resumePage = if (activeSession.pagesRead > 0) {
+                                    (activeSession.startPage + activeSession.pagesRead - 1)
+                                        .coerceIn(1, 604)
+                                } else {
+                                    activeSession.startPage.coerceIn(1, 604)
+                                }
                                 onNavigateToMushafWithSession(
                                     resumePage,
                                     activeSession.startPage,
@@ -382,161 +377,26 @@ fun DashboardScreen(
         }
     }
 
-    // Create Session Dialog
+    // Create Session Dialog — unified component shared with the
+    // Session tab so the same widget creates the session no matter
+    // where the user starts. Dashboard's variant uses "Create &
+    // Start" as the confirm label (we navigate into the reader
+    // immediately) while the Session tab uses "Create".
     if (showCreateSessionDialog) {
-        // The user can pick between two anchor strategies:
-        //  - PAGE: classic "start at page N, run for M pages"
-        //  - JUZ:  "start at the first page of juz J, run to its end"
-        // Picking JUZ auto-derives both `startPage` and the target
-        // span from the juz boundary table — the user only commits to
-        // *which* juz they want to study.
-        var nameInput by remember { mutableStateOf(context.getString(com.quranreader.custom.R.string.session_new) + " ${sessions.size + 1}") }
-        var basis by remember { mutableStateOf(SessionBasis.PAGE) }
-        var targetInput by remember { mutableStateOf("10") }
-        var startFromCurrent by remember { mutableStateOf(true) }
-        var customPageInput by remember { mutableStateOf(currentPage.toString()) }
-        var juzInput by remember { mutableStateOf(QuranInfo.getJuzForPage(currentPage).toString()) }
-
-        AlertDialog(
-            onDismissRequest = { showCreateSessionDialog = false },
-            title = { Text(context.getString(com.quranreader.custom.R.string.dashboard_new_session_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_session_name)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Page / Juz toggle. We use two FilterChips
-                    // because Material 3 SegmentedButton landed after
-                    // the Compose BOM this app pins to (2024.05).
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SessionBasis.entries.forEach { b ->
-                            androidx.compose.material3.FilterChip(
-                                selected = basis == b,
-                                onClick = { basis = b },
-                                label = { Text(b.label) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-
-                    when (basis) {
-                        SessionBasis.PAGE -> {
-                            OutlinedTextField(
-                                value = targetInput,
-                                onValueChange = { targetInput = it.filter { c -> c.isDigit() } },
-                                label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_target_pages)) },
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Done
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { startFromCurrent = !startFromCurrent }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Checkbox(
-                                    checked = startFromCurrent,
-                                    onCheckedChange = null,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = context.getString(
-                                        com.quranreader.custom.R.string.dashboard_start_from_current,
-                                        currentPage,
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            if (!startFromCurrent) {
-                                OutlinedTextField(
-                                    value = customPageInput,
-                                    onValueChange = { customPageInput = it.filter { c -> c.isDigit() } },
-                                    label = { Text(context.getString(com.quranreader.custom.R.string.dashboard_start_page)) },
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Number,
-                                        imeAction = ImeAction.Done
-                                    ),
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                        SessionBasis.JUZ -> {
-                            OutlinedTextField(
-                                value = juzInput,
-                                onValueChange = { juzInput = it.filter { c -> c.isDigit() }.take(2) },
-                                label = { Text("Juz number (1–30)") },
-                                supportingText = {
-                                    val j = juzInput.toIntOrNull()?.coerceIn(1, 30)
-                                    if (j != null) {
-                                        val (start, span) = QuranNavigationData.juzPageBounds(j)
-                                        Text("Pages $start–${start + span - 1} ($span pages)")
-                                    }
-                                },
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Done,
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
+        CreateSessionDialog(
+            initialPage = currentPage,
+            sessionCount = sessions.size,
+            confirmLabel = context.getString(com.quranreader.custom.R.string.dashboard_create_start),
+            onDismiss = { showCreateSessionDialog = false },
+            onConfirm = { name, startPage, targetPages ->
+                sessionViewModel.createSession(
+                    name = name,
+                    startPage = startPage,
+                    targetPages = targetPages,
+                )
+                showCreateSessionDialog = false
+                onNavigateToMushafWithSession(startPage, startPage, targetPages)
             },
-            confirmButton = {
-                Button(onClick = {
-                    val resolvedStartPage: Int
-                    val resolvedTarget: Int
-                    when (basis) {
-                        SessionBasis.PAGE -> {
-                            resolvedTarget = targetInput.toIntOrNull()?.coerceIn(1, 604) ?: 10
-                            resolvedStartPage = if (startFromCurrent) currentPage
-                                else customPageInput.toIntOrNull()?.coerceIn(1, 604) ?: currentPage
-                        }
-                        SessionBasis.JUZ -> {
-                            val juz = juzInput.toIntOrNull()?.coerceIn(1, 30) ?: 1
-                            val (start, span) = QuranNavigationData.juzPageBounds(juz)
-                            resolvedStartPage = start
-                            resolvedTarget = span
-                        }
-                    }
-
-                    // Create session via SessionViewModel (syncs to Session tab)
-                    sessionViewModel.createSession(
-                        name = nameInput.ifBlank { context.getString(com.quranreader.custom.R.string.session_new) + " ${sessions.size + 1}" },
-                        startPage = resolvedStartPage,
-                        targetPages = resolvedTarget
-                    )
-
-                    showCreateSessionDialog = false
-
-                    // Navigate to mushaf with new session — pass the
-                    // anchor page + target along the route so the
-                    // auto-session math is deterministic.
-                    onNavigateToMushafWithSession(resolvedStartPage, resolvedStartPage, resolvedTarget)
-                }) { Text(context.getString(com.quranreader.custom.R.string.dashboard_create_start)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateSessionDialog = false }) {
-                    Text(context.getString(com.quranreader.custom.R.string.common_cancel))
-                }
-            }
         )
     }
 

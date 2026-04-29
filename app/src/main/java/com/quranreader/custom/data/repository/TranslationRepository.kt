@@ -6,6 +6,7 @@ import com.quranreader.custom.data.QuranInfo
 import com.quranreader.custom.data.local.AyahCoordinateDao
 import com.quranreader.custom.data.local.TranslationDao
 import com.quranreader.custom.data.local.TranslationEditionDao
+import com.quranreader.custom.data.local.ayahinfo.AyahInfoRepository
 import com.quranreader.custom.data.model.TranslationEdition
 import com.quranreader.custom.data.model.TranslationText
 import com.quranreader.custom.data.remote.QuranComApi
@@ -35,7 +36,24 @@ import javax.inject.Singleton
 class TranslationRepository @Inject constructor(
     private val translationDao: TranslationDao,
     private val editionDao: TranslationEditionDao,
+    /**
+     * Legacy per-page (surah, ayah) source. The runtime never
+     * populates the underlying `ayah_coordinates` table, so this is
+     * only kept as a defensive fallback in case the bundled
+     * `ayahinfo.db` ever fails to load. The primary source is
+     * [ayahInfoRepository] below.
+     */
     private val ayahCoordinateDao: AyahCoordinateDao,
+    /**
+     * Per-page glyph table from the bundled, pre-packaged
+     * `ayahinfo.db`. This is the same data the mushaf renderer uses
+     * for tap-to-highlight, which means the translation panel and
+     * the mushaf agree on "which verses are on this page" — critical
+     * for HIGHLIGHTED_ONLY mode (otherwise the user can highlight a
+     * verse that isn't in the translation list and the panel falls
+     * to "No translation available" even though the edition has it).
+     */
+    private val ayahInfoRepository: AyahInfoRepository,
     private val quranComApi: QuranComApi,
     private val context: Context
 ) {
@@ -116,10 +134,30 @@ class TranslationRepository @Inject constructor(
 
     /**
      * Resolve the (surah, ayah) pairs that actually appear on the
-     * given mushaf [page]. Uses the bundled glyph table when present;
-     * falls back to a coarse estimate otherwise.
+     * given mushaf [page]. Three-tier lookup:
+     *
+     *   1. **`ayahinfo.db` glyph table** — the bundled, ground-truth
+     *      per-glyph rectangle table that powers tap-to-highlight.
+     *      This is the same data the mushaf uses, which guarantees
+     *      the translation panel agrees with what the user sees.
+     *   2. **Legacy `ayah_coordinates` table** — only if the glyph
+     *      table happens to be empty (corrupted asset DB). The
+     *      runtime never populates this table at runtime; the path
+     *      exists purely as a defence-in-depth.
+     *   3. **Coarse estimate** — last-resort "average ayahs per
+     *      page within a surah" fallback so the panel still renders
+     *      something instead of going blank when both DBs fail.
      */
     private suspend fun ayahsOnPage(page: Int): List<Pair<Int, Int>> {
+        val glyphs = try {
+            ayahInfoRepository.glyphsForPage(page)
+        } catch (e: Exception) {
+            Log.w("TranslationRepository", "glyphsForPage($page) failed", e)
+            emptyList()
+        }
+        if (glyphs.isNotEmpty()) {
+            return glyphs.map { it.suraNumber to it.ayahNumber }.distinct()
+        }
         val coords = try {
             ayahCoordinateDao.getCoordinatesForPage(page)
         } catch (e: Exception) {

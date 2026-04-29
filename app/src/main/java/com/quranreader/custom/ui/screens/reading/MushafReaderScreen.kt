@@ -7,11 +7,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,11 +25,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.Orientation
@@ -34,6 +43,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -48,21 +58,19 @@ import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.ScreenLockLandscape
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -71,7 +79,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,16 +90,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.drawToBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.quranreader.custom.R
@@ -98,6 +112,7 @@ import kotlinx.coroutines.launch
 import com.quranreader.custom.data.QuranInfo
 import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_HEIGHT_PX
 import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_WIDTH_PX
+import com.quranreader.custom.ui.viewmodel.AutoSaveTick
 import com.quranreader.custom.data.preferences.ReaderOrientation
 import com.quranreader.custom.ui.components.TranslationEditionsDialog
 import com.quranreader.custom.ui.components.TranslationPanel
@@ -184,6 +199,11 @@ fun MushafReaderScreen(
     val pagesReadInSession by readingViewModel.pagesReadInSession.collectAsStateWithLifecycle()
     val sessionTargetPages by readingViewModel.sessionTargetPages.collectAsStateWithLifecycle()
     val newSessionLimit by readingViewModel.newSessionLimit.collectAsStateWithLifecycle()
+    // Auto-save chip state for the slide-down panel — mirrors the
+    // configurable [UserPreferences.autoSavePageSeconds] window so the
+    // user can see exactly when their progress will be committed and
+    // get a brief check-mark flash when it lands.
+    val autoSaveTick by readingViewModel.autoSaveTick.collectAsStateWithLifecycle()
 
     // Audio state
     val audioState by audioViewModel.playbackState.collectAsStateWithLifecycle()
@@ -368,7 +388,11 @@ fun MushafReaderScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (showSessionCompleteSheet) Modifier.blur(20.dp) else Modifier),
+    ) {
         // HorizontalPager for page-to-page navigation in both
         // orientations (swipe left/right). In landscape the page
         // image overflows vertically (1024×1656 aspect ratio at
@@ -455,7 +479,7 @@ fun MushafReaderScreen(
             }
         }
 
-        // ── Slide-DOWN panel (top): verse context ─────────────────
+        // ── Slide-DOWN panel (top): verse context ─────────────
         AnimatedVisibility(
             visible = panelsVisible,
             enter = slideInVertically(
@@ -480,12 +504,13 @@ fun MushafReaderScreen(
                 pageNumber = highlightedAyah?.page ?: currentPageNumber,
                 surahNumber = highlightedAyah?.surah ?: 1,
                 ayahNumber = highlightedAyah?.ayah ?: 1,
+                autoSaveTick = autoSaveTick,
                 onClose = { readingViewModel.clearHighlight() },
                 onNavigate = { showNavigateDialog = true },
             )
         }
 
-        // ── Slide-UP panel (bottom): actions ──────────────────────
+        // ── Slide-UP panel (bottom): actions ──────────────────
         AnimatedVisibility(
             visible = panelsVisible,
             enter = slideInVertically(
@@ -560,110 +585,71 @@ fun MushafReaderScreen(
                 .navigationBarsPadding()
                 .padding(bottom = if (panelsVisible) 104.dp else 16.dp),
         )
+
+        // ── Floating auto-save indicator ─────────────────────
+        // Anchored at top-right with status-bar padding so it sits
+        // *above* the page WebP's decorative top border instead of
+        // landing on top of the calligraphy. The chip stays visible
+        // through the configurable countdown + saved-flash window
+        // and slides away once `AutoSaveTick.Idle` is emitted, so
+        // the user gets continuous "is my progress saving?" feedback
+        // while reading without the slide-down panel ever covering
+        // an ayah.
+        AnimatedVisibility(
+            visible = autoSaveTick !is AutoSaveTick.Idle,
+            enter = fadeIn(animationSpec = Motion.standard()) +
+                slideInVertically(
+                    initialOffsetY = { -it / 2 },
+                    animationSpec = Motion.emphasizedDecelerate(),
+                ),
+            exit = fadeOut(animationSpec = Motion.short()) +
+                slideOutVertically(
+                    targetOffsetY = { -it / 2 },
+                    animationSpec = Motion.emphasizedAccelerate(),
+                ),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                // Use `safeDrawing` (status bars + display cutouts +
+                // system gesture insets) restricted to the top and
+                // end edges so the chip never lands behind a notch /
+                // in-screen camera in landscape, never tucks under
+                // the gesture / nav inset on foldable inner panels,
+                // and never spills past the window edge in resizable
+                // (WSA / Chromebook / split-screen) layouts. The
+                // bare `statusBarsPadding()` only covered the top —
+                // the right edge inset was missing in landscape and
+                // narrow windows, which is what was clipping the
+                // chip in the bug report.
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Top + WindowInsetsSides.End,
+                    ),
+                )
+                .padding(top = 4.dp, end = 16.dp),
+        ) {
+            FloatingAutoSaveIndicator(state = autoSaveTick)
+        }
     }
 
-    // ── Session Complete Sheet ────────────────────────────────────
+    // ── Session Complete Splash ──────────────────────────────────
+    // Replaced the old `ModalBottomSheet` because M3's bottom-sheet
+    // sizing collided with the reader's `requestedOrientation`
+    // lock and resizable-display quirks (MuMu emulator,
+    // Chromebook, Samsung DeX), leaving the chip / button row
+    // clipped past the visible viewport in both portrait and
+    // landscape. A full-screen splash is immune to those quirks:
+    // it controls its own window, fills the viewport exactly, and
+    // adapts portrait/landscape via `BoxWithConstraints`.
     if (showSessionCompleteSheet) {
-        ModalBottomSheet(
-            onDismissRequest = {
+        SessionCompleteSplash(
+            pagesRead = pagesReadInSession,
+            durationMinutes = readingViewModel.sessionDurationMinutes(),
+            onContinue = { readingViewModel.continueReadingSession() },
+            onClose = {
                 readingViewModel.closeSession()
                 onBack()
             },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            dragHandle = { BottomSheetDefaults.DragHandle() },
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp),
-                    )
-                    Text(
-                        text = context.getString(R.string.session_complete_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                context.getString(
-                                    R.string.session_complete_pages,
-                                    pagesReadInSession,
-                                )
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                context.getString(
-                                    R.string.session_complete_time,
-                                    readingViewModel.sessionDurationMinutes(),
-                                )
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            readingViewModel.closeSession()
-                            onBack()
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(context.getString(R.string.common_close))
-                    }
-
-                    Button(
-                        onClick = { readingViewModel.continueReadingSession() },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(context.getString(R.string.session_continue_reading))
-                    }
-                }
-            }
-        }
+        )
     }
 
     // Editions catalogue dialog — opened from the chip in the
@@ -747,6 +733,13 @@ private fun TopInfoPanel(
     pageNumber: Int,
     surahNumber: Int,
     ayahNumber: Int,
+    /**
+     * Drives the auto-save chip rendered alongside the existing
+     * Page / Juz chips. Defaults to [AutoSaveTick.Idle] for previews
+     * so the chip degrades to a static "Saved" pill when no
+     * countdown is wired up.
+     */
+    autoSaveTick: AutoSaveTick = AutoSaveTick.Idle,
     onClose: () -> Unit,
     onNavigate: () -> Unit,
 ) {
@@ -808,7 +801,11 @@ private fun TopInfoPanel(
 
                 if (!compact) {
                     Spacer(Modifier.size(8.dp))
-                    InfoChipRow(pageNumber = pageNumber, juz = juz)
+                    InfoChipRow(
+                        pageNumber = pageNumber,
+                        juz = juz,
+                        autoSaveTick = autoSaveTick,
+                    )
                 }
             }
 
@@ -820,7 +817,11 @@ private fun TopInfoPanel(
                         .padding(start = 56.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    InfoChipRow(pageNumber = pageNumber, juz = juz)
+                    InfoChipRow(
+                        pageNumber = pageNumber,
+                        juz = juz,
+                        autoSaveTick = autoSaveTick,
+                    )
                 }
             }
 
@@ -856,14 +857,18 @@ private fun TopInfoPanel(
 }
 
 /**
- * Two side-by-side context chips: page number and juz. Pulled out so
- * both the wide-and-narrow layouts in [TopInfoPanel] share a single
- * source of truth for the chips' look.
+ * Three side-by-side context chips: page number, juz, and the
+ * auto-save indicator. Pulled out so both the wide-and-narrow layouts
+ * in [TopInfoPanel] share a single source of truth for the chips'
+ * look. The auto-save chip is the same pill silhouette as the other
+ * two so the row reads as one symmetrical group, with a small ring
+ * of [CircularProgressIndicator] around its icon while counting down.
  */
 @Composable
 private fun InfoChipRow(
     pageNumber: Int,
     juz: Int,
+    autoSaveTick: AutoSaveTick,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ContextChip(
@@ -874,6 +879,7 @@ private fun InfoChipRow(
             icon = Icons.Default.Bookmark,
             label = stringResource(R.string.mushaf_juz_label, juz),
         )
+        AutoSaveChip(state = autoSaveTick)
     }
 }
 
@@ -897,6 +903,170 @@ private fun ContextChip(
                 modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Compact, corner-anchored auto-save indicator shown during reading
+ * so the user gets continuous "is my progress saving?" feedback
+ * without the slide-down panel ever covering an ayah. Three visual
+ * modes — mirroring [AutoSaveTick] — share the same pill silhouette:
+ *
+ * - **Counting**: tiny [CircularProgressIndicator] ring around a
+ *   save icon, plus a "3s, 2s, 1s" label so the user can see how
+ *   much longer until the commit fires.
+ * - **Saved**: same silhouette with a tertiary-tinted check-mark and
+ *   the localised "Saved" label, lingering ~ 1.5 s after the persist.
+ * - **Idle**: caller is expected to hide the indicator entirely;
+ *   we still render a Saved-style pill defensively so a stale
+ *   render doesn't show garbage.
+ *
+ * Sized small (icon ≈ 14 dp, padding ≈ 10/6 dp) so it fits in the
+ * top-right corner above the page's decorative border without
+ * landing on calligraphy.
+ */
+@Composable
+private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
+    val isCounting = state is AutoSaveTick.Counting
+    val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
+    // BY_PAGES uses a different localised template ("%d pages" /
+    // "%d hlm") so the user can see at a glance that this is a
+    // page-flip countdown, not a seconds dwell timer.
+    val label: String? = when (state) {
+        is AutoSaveTick.Counting -> stringResource(
+            if (state.byPages) R.string.mushaf_autosave_counting_pages
+            else R.string.mushaf_autosave_counting,
+            state.secondsLeft,
+        )
+        AutoSaveTick.Saved -> stringResource(R.string.mushaf_autosave_saved)
+        AutoSaveTick.Idle -> null
+    }
+    val accent = if (isCounting) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.tertiary
+
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        tonalElevation = 6.dp,
+        shadowElevation = 4.dp,
+        // Cap the pill's max width so the label can't push the icon
+        // off-screen in tight windows (split-screen / WSA / narrow
+        // foldables) or under large font-scale accessibility settings.
+        // 160 dp comfortably fits "Saved" and "31 pages" / "31 hlm";
+        // longer strings ellipsise gracefully via the Text below.
+        modifier = Modifier.widthIn(max = 160.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // Icon + optional ring share the same 14 dp footprint so
+            // the pill stays compact in the corner.
+            Box(
+                modifier = Modifier.size(14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (state is AutoSaveTick.Counting) {
+                    CircularProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier.size(14.dp),
+                        color = accent,
+                        strokeWidth = 1.5.dp,
+                        trackColor = accent.copy(alpha = 0.25f),
+                    )
+                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = stringResource(
+                        R.string.mushaf_autosave_content_description,
+                    ),
+                    modifier = Modifier.size(if (isCounting) 9.dp else 14.dp),
+                    tint = accent,
+                )
+            }
+            if (label != null) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Auto-save status chip rendered alongside Page / Juz inside
+ * [InfoChipRow]. Three visual modes — [AutoSaveTick.Counting],
+ * [AutoSaveTick.Saved], and [AutoSaveTick.Idle] — share the exact
+ * pill silhouette of [ContextChip] so the row reads as a single
+ * symmetrical group. The countdown ring uses a 14-dp
+ * [CircularProgressIndicator] sat behind the same 14-dp icon so the
+ * ring + icon footprint matches the other chips' icons one-for-one.
+ */
+@Composable
+private fun AutoSaveChip(state: AutoSaveTick) {
+    val isCounting = state is AutoSaveTick.Counting
+    val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
+    // BY_PAGES uses a different localised template ("%d pages" /
+    // "%d hlm") so the user can see at a glance that this is a
+    // page-flip countdown, not a seconds dwell timer.
+    val label = when (state) {
+        is AutoSaveTick.Counting -> stringResource(
+            if (state.byPages) R.string.mushaf_autosave_counting_pages
+            else R.string.mushaf_autosave_counting,
+            state.secondsLeft,
+        )
+        AutoSaveTick.Saved -> stringResource(R.string.mushaf_autosave_saved)
+        AutoSaveTick.Idle -> stringResource(R.string.mushaf_autosave_idle)
+    }
+    val accent = if (isCounting) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.tertiary
+
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = accent.copy(alpha = 0.12f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // Icon + optional ring share the same 14 dp footprint so
+            // this chip's left-edge spacing aligns with Page / Juz.
+            Box(
+                modifier = Modifier.size(14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (state is AutoSaveTick.Counting) {
+                    CircularProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier.size(14.dp),
+                        color = accent,
+                        strokeWidth = 1.5.dp,
+                        trackColor = accent.copy(alpha = 0.25f),
+                    )
+                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = stringResource(
+                        R.string.mushaf_autosave_content_description,
+                    ),
+                    modifier = Modifier.size(if (isCounting) 9.dp else 14.dp),
+                    tint = accent,
+                )
+            }
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
@@ -1363,4 +1533,315 @@ private fun NavigateDialog(
             },
         )
     }
+}
+
+// ── Session Complete Splash ──────────────────────────────────────
+/**
+ * Full-screen "session complete" splash overlay that replaces the
+ * old `ModalBottomSheet`.
+ *
+ * Rendered as a direct composable overlay (no `Dialog` window) so
+ * it inherits the parent size exactly and avoids platform dialog
+ * sizing quirks across orientations. `BackHandler` handles
+ * back-press dismissal.
+ *
+ * The layout adapts on two axes:
+ *  - **Width** caps the content column at 480 dp so wide screens
+ *    (landscape phone, tablet) stay readable.
+ *  - **Height** picks a compact hero / spacing variant when the
+ *    visible viewport is shorter than 480 dp (landscape phone,
+ *    foldable cover) and stays scrollable as a fallback.
+ */
+@Composable
+private fun SessionCompleteSplash(
+    pagesRead: Int,
+    durationMinutes: Int,
+    onContinue: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    // Software blur fallback for API < 31 where Modifier.blur() is
+    // a no-op. Captures the current view, downscales, applies a
+    // two-pass box blur, and displays it behind the scrim.
+    val softwareBlurBg = remember {
+        if (android.os.Build.VERSION.SDK_INT >= 31) return@remember null
+        try {
+            val original = view.drawToBitmap()
+            val blurred = softwareBlur(original, radius = 25)
+            original.recycle()
+            blurred.asImageBitmap()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // Back press closes the splash (same as tapping "Close").
+    BackHandler(onBack = onClose)
+
+    Box(Modifier.fillMaxSize()) {
+        // Blurred background image (API < 31 only; on 31+ the
+        // main content Box already has Modifier.blur applied).
+        softwareBlurBg?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.FillBounds,
+            )
+        }
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.75f)),
+        ) {
+            // Compact-height layout for landscape phone (visible
+            // viewport ~ 360 × 720 dp portrait flips to 720 × 360
+            // dp landscape on most devices). The threshold is
+            // Material's small-screen bound for large vertical UI.
+            val isCompactHeight = maxHeight < 480.dp
+            val heroSize = if (isCompactHeight) 88.dp else 120.dp
+            val heroIconSize = if (isCompactHeight) 48.dp else 64.dp
+            val titleStyle = if (isCompactHeight) {
+                MaterialTheme.typography.headlineMedium
+            } else {
+                MaterialTheme.typography.displaySmall
+            }
+            val verticalGapHero = if (isCompactHeight) 16.dp else 24.dp
+            val verticalGapStats = if (isCompactHeight) 24.dp else 32.dp
+            val verticalGapButtons = if (isCompactHeight) 20.dp else 28.dp
+
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 480.dp)
+                    .align(Alignment.Center)
+                    .verticalScroll(rememberScrollState())
+                    // safeDrawing keeps the splash clear of
+                    // status bar, navigation bar, gesture insets
+                    // and display cutouts on every form factor.
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Hero — circular primary-container with a check.
+                Box(
+                    modifier = Modifier
+                        .size(heroSize)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(heroIconSize),
+                    )
+                }
+                Spacer(Modifier.height(verticalGapHero))
+
+                // Title.
+                Text(
+                    text = context.getString(R.string.session_complete_title),
+                    style = titleStyle,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                // Subtitle — affirming copy under the title.
+                Text(
+                    text = context.getString(R.string.session_complete_subtitle),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(verticalGapStats))
+
+                // Stats card — pages | divider | minutes.
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                        .copy(alpha = 0.5f),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SplashStat(
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
+                            value = pagesRead.toString(),
+                            label = context.getString(
+                                R.string.session_complete_pages_label,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        )
+                        VerticalDivider(
+                            modifier = Modifier.height(48.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                        SplashStat(
+                            icon = Icons.Default.Timer,
+                            value = durationMinutes.toString(),
+                            label = context.getString(
+                                R.string.session_complete_minutes_label,
+                            ),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(verticalGapButtons))
+
+                // Primary action — Continue Reading.
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = context.getString(R.string.session_continue_reading),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+
+                // Secondary action — Close.
+                TextButton(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = context.getString(R.string.common_close),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+// ── End Session Complete Splash ────────────────────────────────────
+
+@Composable
+private fun SplashStat(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+// ── Software blur (API < 31 fallback) ──────────────────────────────
+/**
+ * Downscale → two-pass box blur → return small [android.graphics.Bitmap].
+ * The caller's [Image] composable upscales with bilinear filtering,
+ * which adds extra smoothing on top of the algorithmic blur.
+ *
+ * Runs in ≈ 2-5 ms on a modern device (operates on ~1/64th of the
+ * original pixel count).
+ */
+private fun softwareBlur(
+    source: android.graphics.Bitmap,
+    radius: Int = 25,
+): android.graphics.Bitmap {
+    val scale = 0.125f
+    val w = (source.width * scale).toInt().coerceAtLeast(1)
+    val h = (source.height * scale).toInt().coerceAtLeast(1)
+    val input = android.graphics.Bitmap.createScaledBitmap(source, w, h, true)
+    val pix = IntArray(w * h)
+    input.getPixels(pix, 0, w, 0, 0, w, h)
+
+    val r = (radius * scale).toInt().coerceIn(1, minOf(w, h) / 2)
+    val d = 2 * r + 1
+
+    // ── Horizontal pass → tmp ──
+    val tmp = IntArray(w * h)
+    for (y in 0 until h) {
+        var sr = 0; var sg = 0; var sb = 0
+        for (i in -r..r) {
+            val c = pix[y * w + i.coerceIn(0, w - 1)]
+            sr += (c shr 16) and 0xFF
+            sg += (c shr 8) and 0xFF
+            sb += c and 0xFF
+        }
+        for (x in 0 until w) {
+            tmp[y * w + x] = (0xFF shl 24) or
+                ((sr / d) shl 16) or ((sg / d) shl 8) or (sb / d)
+            val a = pix[y * w + (x + r + 1).coerceAtMost(w - 1)]
+            val rm = pix[y * w + (x - r).coerceAtLeast(0)]
+            sr += ((a shr 16) and 0xFF) - ((rm shr 16) and 0xFF)
+            sg += ((a shr 8) and 0xFF) - ((rm shr 8) and 0xFF)
+            sb += (a and 0xFF) - (rm and 0xFF)
+        }
+    }
+
+    // ── Vertical pass → out ──
+    val out = IntArray(w * h)
+    for (x in 0 until w) {
+        var sr = 0; var sg = 0; var sb = 0
+        for (i in -r..r) {
+            val c = tmp[i.coerceIn(0, h - 1) * w + x]
+            sr += (c shr 16) and 0xFF
+            sg += (c shr 8) and 0xFF
+            sb += c and 0xFF
+        }
+        for (y in 0 until h) {
+            out[y * w + x] = (0xFF shl 24) or
+                ((sr / d).coerceIn(0, 255) shl 16) or
+                ((sg / d).coerceIn(0, 255) shl 8) or
+                (sb / d).coerceIn(0, 255)
+            val a = tmp[(y + r + 1).coerceAtMost(h - 1) * w + x]
+            val rm = tmp[(y - r).coerceAtLeast(0) * w + x]
+            sr += ((a shr 16) and 0xFF) - ((rm shr 16) and 0xFF)
+            sg += ((a shr 8) and 0xFF) - ((rm shr 8) and 0xFF)
+            sb += (a and 0xFF) - (rm and 0xFF)
+        }
+    }
+
+    input.recycle()
+    val result = android.graphics.Bitmap.createBitmap(
+        w, h, android.graphics.Bitmap.Config.ARGB_8888,
+    )
+    result.setPixels(out, 0, w, 0, 0, w, h)
+    return result
 }

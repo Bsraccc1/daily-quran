@@ -177,6 +177,9 @@
     <string name="session_complete_title">Session Complete</string>
     <string name="session_complete_pages">%1$d pages read</string>
     <string name="session_complete_time">%1$d min</string>
+    <string name="session_complete_subtitle">Great work — your reading streak is alive.</string>
+    <string name="session_complete_pages_label">Pages</string>
+    <string name="session_complete_minutes_label">Minutes</string>
     <string name="session_continue_reading">Continue Reading</string>
     
     <!-- Reading Session -->
@@ -203,6 +206,32 @@
     <string name="dashboard_start_from_current">Start from current page (Page %1$d)</string>
     <string name="dashboard_start_page">Start Page (1-604)</string>
     <string name="dashboard_create_start">Create &amp; Start</string>
+    <string name="dashboard_create">Create</string>
+    <!-- Inclusive range summary used by the create-session dialog
+         and the auto-stop sheet. "Pages 1–10 (10 pages)". -->
+    <string name="dashboard_pages_range_summary">Pages %1$d–%2$d (%3$d pages)</string>
+    <string name="dashboard_juz_label">Juz number (1–30)</string>
+
+    <!-- Reader Auto-save Indicator (slide-down panel chip) -->
+    <string name="mushaf_autosave_counting">%1$ds</string>
+    <string name="mushaf_autosave_counting_pages">%1$d pages</string>
+    <string name="mushaf_autosave_saved">Saved</string>
+    <string name="mushaf_autosave_idle">Saved</string>
+    <string name="mushaf_autosave_content_description">Auto-save indicator</string>
+    <!-- Settings → Reading: auto-save delay -->
+    <string name="settings_autosave_title">Auto-save</string>
+    <string name="settings_autosave_description">When the reader should commit your progress. Pick a dwell timer (saves after you stay on a page) or a page-count threshold (saves every N flips).</string>
+    <string name="settings_autosave_mode_by_time">By time</string>
+    <string name="settings_autosave_mode_by_pages">By pages</string>
+    <string name="settings_autosave_seconds_label">Seconds (1-60)</string>
+    <string name="settings_autosave_seconds_current">Current: %1$ds</string>
+    <string name="settings_autosave_pages_label">Pages (1-50)</string>
+    <string name="settings_autosave_pages_current">Current: every %1$d pages</string>
+    <!-- Legacy aliases kept so any external string lookup that grabs the old
+         keys still resolves — settings_autosave_label / settings_autosave_current
+         used to drive the seconds field. -->
+    <string name="settings_autosave_label">@string/settings_autosave_seconds_label</string>
+    <string name="settings_autosave_current">@string/settings_autosave_seconds_current</string>
 
     <!-- Search → Cari Ayat (verse lookup) -->
     <string name="search_chip_ayah">Verse</string>

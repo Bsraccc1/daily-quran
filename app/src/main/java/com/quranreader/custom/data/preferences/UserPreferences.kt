@@ -22,6 +22,25 @@ enum class DisplayMode { LIGHT, DARK, SYSTEM }
 enum class TranslationScope { HIGHLIGHTED_ONLY, ENTIRE_PAGE }
 
 /**
+ * Strategy the reader uses to decide *when* to commit session
+ * progress to DataStore.
+ *
+ * - [BY_TIME] (default, legacy): debounce on the user dwelling on
+ *   the same page for [UserPreferences.autoSavePageSeconds] seconds.
+ *   Best for users who pause to reflect on every ayah — quick
+ *   swipes don't pollute their progress, real reads do.
+ * - [BY_PAGES]: commit every Nth page flip
+ *   ([UserPreferences.autoSavePageCount]) regardless of dwell time.
+ *   Best for users who batch-read many pages quickly and don't want
+ *   the dwell timer holding their progress hostage.
+ *
+ * The reader's auto-save chip mirrors whichever mode is active:
+ * BY_TIME shows a seconds countdown ring, BY_PAGES shows a
+ * "X / N pages" progress ring.
+ */
+enum class AutoSaveMode { BY_TIME, BY_PAGES }
+
+/**
  * Reader orientation override. AUTO follows the device sensor
  * (which itself respects the user's system rotation lock); the
  * other two pin the reader regardless of how the phone is held.
@@ -75,6 +94,22 @@ class UserPreferences @Inject constructor(
         // ── Session Limits ───────────────────────────────────────────────────
         private val NEW_SESSION_LIMIT         = intPreferencesKey("new_session_limit")
         private val CONTINUE_READING_LIMIT    = intPreferencesKey("continue_reading_limit")
+        // Auto-save dwell window for the reader's progress indicator.
+        // The reader exposes a small countdown chip in its top panel
+        // and persists session progress once the timer elapses; users
+        // can shorten it (peace of mind) or lengthen it (battery /
+        // datastore churn) from Settings → Reading.
+        private val AUTO_SAVE_PAGE_SECONDS    = intPreferencesKey("auto_save_page_seconds")
+        // Which auto-save trigger the reader uses — dwell timer or
+        // page-count threshold. Stored as the [AutoSaveMode] enum
+        // name; missing / unknown values fall back to BY_TIME so
+        // pre-v10 users keep the legacy behavior on first launch.
+        private val AUTO_SAVE_MODE_KEY        = stringPreferencesKey("auto_save_mode")
+        // Page-count threshold for [AutoSaveMode.BY_PAGES]. Range
+        // 1..50 — a one-page threshold is essentially "save every
+        // flip", a 50-page threshold means batched saves only after
+        // a full juz-ish stretch.
+        private val AUTO_SAVE_PAGE_COUNT_KEY  = intPreferencesKey("auto_save_page_count")
 
         // ── Translation ────────────────────────────────────────────────────
         private val TRANSLATION_LANGUAGE_KEY  = stringPreferencesKey("translation_language")
@@ -134,6 +169,57 @@ class UserPreferences @Inject constructor(
     }
     suspend fun setContinueReadingLimit(limit: Int) = dataStore.edit {
         it[CONTINUE_READING_LIMIT] = limit.coerceIn(1, 50)
+    }
+
+    /**
+     * How long (in seconds) the reader waits on a stable page before
+     * persisting the session progress. The same value drives the
+     * auto-save countdown chip in the slide-down panel so the user
+     * can see exactly when their progress will be committed.
+     *
+     * Defaults to 3 seconds — long enough to weed out swipes the user
+     * is just glancing through, short enough that backing out of the
+     * reader after a real read still saves before the activity is
+     * destroyed. Range 1..60 is enforced on the setter so a misclick
+     * in the Settings field can't accidentally disable saves.
+     */
+    val autoSavePageSeconds: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[AUTO_SAVE_PAGE_SECONDS] ?: 3
+    }
+    suspend fun setAutoSavePageSeconds(seconds: Int) = dataStore.edit {
+        it[AUTO_SAVE_PAGE_SECONDS] = seconds.coerceIn(1, 60)
+    }
+
+    /**
+     * Which trigger the reader uses to decide when to persist
+     * session progress. See [AutoSaveMode]. Defaults to
+     * [AutoSaveMode.BY_TIME] so users who never open the picker
+     * keep the legacy dwell-timer behaviour. Unknown / corrupted
+     * values also fall back to BY_TIME.
+     */
+    val autoSaveMode: Flow<AutoSaveMode> = dataStore.data.map { prefs ->
+        when (prefs[AUTO_SAVE_MODE_KEY]) {
+            AutoSaveMode.BY_PAGES.name -> AutoSaveMode.BY_PAGES
+            else -> AutoSaveMode.BY_TIME
+        }
+    }
+    suspend fun setAutoSaveMode(mode: AutoSaveMode) = dataStore.edit {
+        it[AUTO_SAVE_MODE_KEY] = mode.name
+    }
+
+    /**
+     * How many pages the user must flip past before
+     * [AutoSaveMode.BY_PAGES] commits session progress to
+     * DataStore. Defaults to 3 — same numeric default as
+     * [autoSavePageSeconds] so the picker feels symmetric on first
+     * encounter — and is range-coerced to 1..50 on the setter so a
+     * misclick can't disable saves entirely.
+     */
+    val autoSavePageCount: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[AUTO_SAVE_PAGE_COUNT_KEY] ?: 3
+    }
+    suspend fun setAutoSavePageCount(pages: Int) = dataStore.edit {
+        it[AUTO_SAVE_PAGE_COUNT_KEY] = pages.coerceIn(1, 50)
     }
 
     // ── Display Mode ──────────────────────────────────────────────────────────
@@ -197,6 +283,25 @@ class UserPreferences @Inject constructor(
         val current = parseSessions(prefs[SESSIONS_KEY] ?: "").filter { it.id != sessionId }
         prefs[SESSIONS_KEY] = serializeSessions(current)
         if (prefs[ACTIVE_SESSION_ID_KEY] == sessionId) prefs.remove(ACTIVE_SESSION_ID_KEY)
+    }
+
+    /**
+     * Bump the active session's [ReadingSession.targetPages] by
+     * [additionalPages]. Mirrors [extendSession] (which only touches
+     * the legacy single-session keys) so the in-reader "Continue
+     * Reading" sheet keeps the multi-session card's progress bar
+     * accurate — without this the card would still show "10 / 10 ✓"
+     * after the user extended for two more pages.
+     */
+    suspend fun extendActiveSession(additionalPages: Int) = dataStore.edit { prefs ->
+        val activeId = prefs[ACTIVE_SESSION_ID_KEY] ?: return@edit
+        val current = parseSessions(prefs[SESSIONS_KEY] ?: "").toMutableList()
+        val idx = current.indexOfFirst { it.id == activeId }
+        if (idx >= 0) {
+            val s = current[idx]
+            current[idx] = s.copy(targetPages = (s.targetPages + additionalPages).coerceAtLeast(1))
+            prefs[SESSIONS_KEY] = serializeSessions(current)
+        }
     }
     suspend fun setActiveSession(sessionId: String?) = dataStore.edit { prefs ->
         if (sessionId == null) prefs.remove(ACTIVE_SESSION_ID_KEY)
