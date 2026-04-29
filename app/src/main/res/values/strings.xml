@@ -29,6 +29,9 @@
     <string name="reading_remove_bookmark">Remove Bookmark</string>
     <string name="reading_go_to_page">Go to Page</string>
     <string name="reading_settings">Reading Settings</string>
+    <string name="reading_zoom_in">Zoom in</string>
+    <string name="reading_zoom_out">Zoom out</string>
+    <string name="reading_zoom_reset">Reset zoom</string>
     
     <!-- Session Management -->
     <string name="session_active">Active Session</string>

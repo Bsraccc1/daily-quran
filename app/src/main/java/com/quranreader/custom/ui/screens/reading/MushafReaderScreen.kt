@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -55,6 +56,8 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
@@ -84,6 +87,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -123,68 +127,20 @@ import com.quranreader.custom.ui.viewmodel.AudioViewModel
 import com.quranreader.custom.ui.viewmodel.ReadingViewModel
 import com.quranreader.custom.ui.viewmodel.TranslationViewModel
 
-/**
- * Mushaf Reader Screen — Layer 2.
- *
- * Distraction-free Quran page viewer. The page is the only thing on
- * screen until the user **selects an ayah by tapping its calligraphy**.
- * That gesture lights the verse with the highlight system and reveals
- * two frosted-glass panels:
- *
- *  - **Slide-down panel** (top): the verse's context — surah, ayah
- *    number, page, juz. Read-only chips arranged for a quick glance.
- *  - **Slide-up panel** (bottom): the actions you can take on the
- *    selected verse — bookmark, translate, audio, memorize, plus a
- *    back button for leaving the reader.
- *
- * Tapping the page margin (or pressing system back) clears the
- * highlight, which dismisses both panels. The bookmark icon in the
- * bottom panel is keyed off the *highlighted ayah*'s row in the
- * bookmarks DB — toggling 2:255 will never affect 2:256, even when
- * both are bookmarked on the same page.
- *
- * DPI-safe sizing: both panels cap at `min(92% of window, 480 dp)`
- * width with a `≥ 280 dp` floor. Touch targets are 48 dp (Material
- * a11y minimum). Typography is `MaterialTheme.typography` so the OS
- * font-scale propagates correctly to all sizes.
- */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MushafReaderScreen(
     initialPage: Int,
     onBack: () -> Unit = {},
     startSessionAutomatically: Boolean = false,
-    /**
-     * When [startSessionAutomatically] is true, anchor the session to
-     * this page and run the limit math from here. Defaults to 0
-     * meaning "use [initialPage]" so existing call sites (Juz,
-     * Bookmark, search) still work. The Session and Dashboard tabs
-     * pass these explicitly so the limit window is keyed off the
-     * user's chosen start page even if the pager hasn't reported
-     * back its own position yet.
-     */
     sessionStartPageOverride: Int = 0,
-    /**
-     * When [startSessionAutomatically] is true, the number of pages
-     * the session should cover. 0 means "use the user's
-     * `newSessionLimit` setting" (legacy behaviour). The session
-     * card and the Dashboard's "Create & Start" flow pass the actual
-     * value here so a target of 10 is honored as 10, not silently
-     * downgraded to 5 (or whatever `newSessionLimit` is set to).
-     */
     sessionTargetPagesOverride: Int = 0,
-    // When the user enters this screen via the "search by surah + ayah"
-    // flow we receive the verse coordinates here and pre-highlight the
-    // matching ayah on first composition. Both default to 0 which means
-    // "no pre-highlight" so opening the reader from any other entry
-    // point (Juz, Bookmark, Continue Reading, …) keeps its old behaviour.
     initialHighlightSurah: Int = 0,
     initialHighlightAyah: Int = 0,
     readingViewModel: ReadingViewModel = hiltViewModel(),
     audioViewModel: AudioViewModel = hiltViewModel(),
     translationViewModel: TranslationViewModel = hiltViewModel(),
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val pagerState = rememberPagerState(
         initialPage = (initialPage - 1).coerceIn(0, 603),
         pageCount = { 604 },
@@ -199,17 +155,11 @@ fun MushafReaderScreen(
     val pagesReadInSession by readingViewModel.pagesReadInSession.collectAsStateWithLifecycle()
     val sessionTargetPages by readingViewModel.sessionTargetPages.collectAsStateWithLifecycle()
     val newSessionLimit by readingViewModel.newSessionLimit.collectAsStateWithLifecycle()
-    // Auto-save chip state for the slide-down panel — mirrors the
-    // configurable [UserPreferences.autoSavePageSeconds] window so the
-    // user can see exactly when their progress will be committed and
-    // get a brief check-mark flash when it lands.
     val autoSaveTick by readingViewModel.autoSaveTick.collectAsStateWithLifecycle()
 
-    // Audio state
     val audioState by audioViewModel.playbackState.collectAsStateWithLifecycle()
     val currentAudioAyah by audioViewModel.currentAyah.collectAsStateWithLifecycle()
 
-    // Translation state — edition-aware (v9+)
     val showTranslationPanel by translationViewModel.showTranslationPanel.collectAsStateWithLifecycle()
     val translations by translationViewModel.translations.collectAsStateWithLifecycle()
     val translationLoading by translationViewModel.isLoading.collectAsStateWithLifecycle()
@@ -228,30 +178,19 @@ fun MushafReaderScreen(
 
     val currentPageNumber = pagerState.currentPage + 1
 
-    // v3.0: state for memorization overlay
     var showMemorizeOverlay by remember { mutableStateOf(false) }
 
-    // v9: editions catalogue dialog (download / pick / delete)
     var showEditionsDialog by remember { mutableStateOf(false) }
 
-    // Unified navigate dialog (merges Surah+Ayah and Page jump).
     var showNavigateDialog by remember { mutableStateOf(false) }
 
-    // Coroutine scope for pager scrollToPage() side effects from
-    // the jump dialogs. Tied to this composable so the scroll is
-    // cancelled if the user navigates away mid-animation.
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Update current page when pager changes — pushes into both view
-    // models so the translation panel reloads automatically.
     LaunchedEffect(pagerState.currentPage) {
         readingViewModel.setCurrentPage(pagerState.currentPage + 1)
         translationViewModel.setCurrentPage(pagerState.currentPage + 1)
     }
 
-    // Mirror the highlighted ayah into the translation VM whenever it
-    // changes, so the panel can either filter (HIGHLIGHTED_ONLY) or
-    // accent (ENTIRE_PAGE) the matching row.
     LaunchedEffect(highlightedAyah?.surah, highlightedAyah?.ayah) {
         translationViewModel.setHighlightedAyah(
             highlightedAyah?.surah,
@@ -259,12 +198,6 @@ fun MushafReaderScreen(
         )
     }
 
-    // Apply the user's orientation override at the Activity level. The
-    // reader is the only screen that supports landscape (the rest of
-    // the app is a portrait-locked phone UI by manifest). When the
-    // user backs out of the reader the DisposableEffect's onDispose
-    // restores the manifest default so the dashboard / sessions tabs
-    // don't accidentally inherit a landscape lock.
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     androidx.compose.runtime.DisposableEffect(readerOrientation, activity) {
         val previous = activity?.requestedOrientation
@@ -279,10 +212,6 @@ fun MushafReaderScreen(
         }
     }
 
-    // Pre-highlight the requested ayah when entering via the "search by
-    // surah + ayah" flow. Runs exactly once because the keys are the
-    // navigation arguments — they don't change during the lifetime of
-    // a single MushafReaderScreen instance.
     LaunchedEffect(initialHighlightSurah, initialHighlightAyah) {
         if (initialHighlightSurah > 0 && initialHighlightAyah > 0) {
             readingViewModel.setInitialHighlight(
@@ -290,28 +219,9 @@ fun MushafReaderScreen(
                 surah = initialHighlightSurah,
                 ayah = initialHighlightAyah,
             )
-            // Intentionally NOT calling translationViewModel.setAyahHighlight()
-            // here — that side-effect pops the translation sheet open and
-            // we want the search-jump to land on a clean reader view with
-            // just the verse highlighted on the page.
         }
     }
 
-    // Auto-start session if requested.
-    //
-    // We prefer the route-supplied overrides over the legacy DataStore
-    // Flow because the latter races with the pager's first
-    // `setCurrentPage(...)` emission. Without the overrides, opening
-    // an existing multi-session would silently downgrade `targetPages`
-    // to the user's `newSessionLimit` setting (typically 5), regardless
-    // of what the session actually requested — the bug the user
-    // reported as "target=10 but I'm limited to 6 pages forward".
-    //
-    // The keys include the overrides so navigating to a *different*
-    // session (different start/target on the same composable
-    // instance via `launchSingleTop`) re-arms with the new values.
-    // `startSessionWithStart` itself is idempotent for unchanged args
-    // so simple recompositions don't reset the timer.
     LaunchedEffect(
         startSessionAutomatically,
         sessionStartPageOverride,
@@ -331,14 +241,12 @@ fun MushafReaderScreen(
         )
     }
 
-    // Auto-play audio when page changes (if already playing)
     LaunchedEffect(pagerState.currentPage, audioState) {
         if (audioState == com.quranreader.custom.data.audio.PlaybackState.Playing) {
             audioViewModel.playPage(currentPageNumber)
         }
     }
 
-    // Snackbar for error messages
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
@@ -347,40 +255,14 @@ fun MushafReaderScreen(
         }
     }
 
-    // Panels are visible iff the highlighted ayah is on the page
-    // currently being viewed. Two safeguards in one expression:
-    //  1. `highlightedAyah != null`     — user has actually selected
-    //     a verse (we don't show panels for audio-driven highlights
-    //     the user never asked for; that's reserved for the visual
-    //     rectangle on the page only).
-    //  2. `it.page == currentPageNumber` — the user has not swiped
-    //     away from the page where the selection lives. Swiping back
-    //     restores the panels because the highlight itself persists
-    //     in the ViewModel; we just hide the chrome while it's
-    //     out-of-frame so the chips never show stale page/juz info.
     val panelsVisible = highlightedAyah?.let { it.page == currentPageNumber } == true
 
-    // System back button: when panels are showing, clear the highlight
-    // first so the user gets a smooth dismiss step. A second back
-    // press (now with no highlight) falls through to navigation.
     BackHandler(enabled = panelsVisible) {
         readingViewModel.clearHighlight()
     }
 
-    // Detect landscape — the page image (1024×1656 px) is much
-    // taller than the landscape viewport even at natural width,
-    // so each page is wrapped in a vertical lazy container to let the
-    // user scroll up/down through the page. We rely on the natural
-    // aspect-ratio overflow rather than a `.scale()` modifier,
-    // because `.scale()` is a visual-only transform that doesn't
-    // extend the scrollable layout bounds.
-    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
-        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    var landscapeZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
-    // Cache the pager's nested-scroll connection so a fresh instance
-    // isn't allocated on every recomposition. The connection is keyed
-    // off the pager state — it stays valid for the lifetime of this
-    // composable.
     val pageNestedScrollConnection = remember(pagerState) {
         androidx.compose.foundation.pager.PagerDefaults.pageNestedScrollConnection(
             pagerState,
@@ -388,25 +270,17 @@ fun MushafReaderScreen(
         )
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .then(if (showSessionCompleteSheet) Modifier.blur(20.dp) else Modifier),
     ) {
-        // HorizontalPager for page-to-page navigation in both
-        // orientations (swipe left/right). In landscape the page
-        // image overflows vertically (1024×1656 aspect ratio at
-        // fillMaxWidth produces a height taller than the
-        // viewport), so each page is wrapped in a vertical lazy
-        // container to let the user scroll up/down through the page.
+        val isLandscape = maxWidth > maxHeight
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             pageNestedScrollConnection = pageNestedScrollConnection,
         ) { page ->
-            // v3.0 / REQ-006: when audio is playing, override tap-highlight w/ audio-driven highlight.
-            // Remembered to avoid allocating a new HighlightedAyah on every
-            // recomposition (the audio state ticks frequently while playing).
             val audioDrivenHighlight = remember(
                 page, audioState, currentAudioAyah?.surah, currentAudioAyah?.ayah,
             ) {
@@ -422,42 +296,51 @@ fun MushafReaderScreen(
                 }
             }
 
-            // In landscape: LazyColumn lets the
-            // user scroll up/down through the page. We give the
-            // renderer an EXPLICIT height (screenWidth × image
-            // aspect ratio) so the page genuinely overflows the
-            // viewport — relying on `aspectRatio` alone gets
-            // constrained back to viewport height by intrinsic
-            // measurements. In portrait: no scroll needed.
             if (isLandscape) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val pageHeightRatio = IMAGE_HEIGHT_PX.toFloat() / IMAGE_WIDTH_PX.toFloat()
-                    val landscapePageHeight = (maxWidth * pageHeightRatio)
+                    val basePageHeight = (maxWidth * pageHeightRatio)
                         .coerceAtLeast(maxHeight + 1.dp)
+
+                    val zoomedWidth = maxWidth * landscapeZoom
+                    val zoomedHeight = basePageHeight * landscapeZoom
+
                     val listState = rememberLazyListState()
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        item(key = page) {
-                            MushafImageRenderer(
-                                pageNumber = page + 1,
-                                highlightedAyah = audioDrivenHighlight ?: highlightedAyah,
-                                onAyahLongPress = { s, a ->
-                                    readingViewModel.onAyahTapped(page + 1, s, a)
-                                    translationViewModel.setHighlightedAyah(s, a)
-                                    translationViewModel.openPanel()
-                                },
-                                onAyahTap = { s, a ->
-                                    readingViewModel.setInitialHighlight(page + 1, s, a)
-                                },
-                                onSingleTap = { readingViewModel.clearHighlight() },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(landscapePageHeight),
-                                fillContainer = true,
-                            )
+                    val hScrollState = androidx.compose.foundation.rememberScrollState()
+                    val outerModifier = if (landscapeZoom > 1f) {
+                        Modifier
+                            .fillMaxSize()
+                            .horizontalScroll(hScrollState)
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
+                    Box(modifier = outerModifier) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .width(zoomedWidth)
+                                .fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            item(key = page) {
+                                MushafImageRenderer(
+                                    pageNumber = page + 1,
+                                    highlightedAyah = audioDrivenHighlight ?: highlightedAyah,
+                                    onAyahLongPress = { s, a ->
+                                        readingViewModel.onAyahTapped(page + 1, s, a)
+                                        translationViewModel.setHighlightedAyah(s, a)
+                                        translationViewModel.openPanel()
+                                    },
+                                    onAyahTap = { s, a ->
+                                        readingViewModel.setInitialHighlight(page + 1, s, a)
+                                    },
+                                    onSingleTap = { readingViewModel.clearHighlight() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(zoomedHeight),
+                                    fillContainer = true,
+                                )
+                            }
                         }
                     }
                 }
@@ -479,7 +362,6 @@ fun MushafReaderScreen(
             }
         }
 
-        // ── Slide-DOWN panel (top): verse context ─────────────
         AnimatedVisibility(
             visible = panelsVisible,
             enter = slideInVertically(
@@ -495,11 +377,6 @@ fun MushafReaderScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            // Panel data is sourced from the *highlight* itself, not
-            // from the live pager. That keeps the chips consistent
-            // during the exit animation when AnimatedVisibility is
-            // still rendering the panel but the user has already
-            // swiped to a different page.
             TopInfoPanel(
                 pageNumber = highlightedAyah?.page ?: currentPageNumber,
                 surahNumber = highlightedAyah?.surah ?: 1,
@@ -510,7 +387,6 @@ fun MushafReaderScreen(
             )
         }
 
-        // ── Slide-UP panel (bottom): actions ──────────────────
         AnimatedVisibility(
             visible = panelsVisible,
             enter = slideInVertically(
@@ -533,6 +409,8 @@ fun MushafReaderScreen(
                 isTranslateOpen = showTranslationPanel,
                 isMemorizeOpen = showMemorizeOverlay,
                 readerOrientation = readerOrientation,
+                isLandscape = isLandscape,
+                landscapeZoom = landscapeZoom,
                 onBack = onBack,
                 onBookmarkToggle = { readingViewModel.toggleAyahBookmark() },
                 onTranslateToggle = {
@@ -548,13 +426,12 @@ fun MushafReaderScreen(
                 },
                 onMemorizeToggle = { showMemorizeOverlay = true },
                 onOrientationCycle = { readingViewModel.cycleReaderOrientation() },
+                onZoomIn = { landscapeZoom = (landscapeZoom + 0.25f).coerceAtMost(3f) },
+                onZoomOut = { landscapeZoom = (landscapeZoom - 0.25f).coerceAtLeast(0.5f) },
+                onZoomReset = { landscapeZoom = 1f },
             )
         }
 
-        // Translation panel — slides up from the bottom, sits over
-        // the mushaf without dimming/blocking taps on the rest of
-        // the page. Capped at 45% of the parent height inside the
-        // composable itself.
         TranslationPanel(
             visible = showTranslationPanel,
             translations = translations,
@@ -575,9 +452,6 @@ fun MushafReaderScreen(
                 .navigationBarsPadding(),
         )
 
-        // Snackbar — anchored above the bottom panel so a transient
-        // error never gets clipped under the action chrome. The 96 dp
-        // bottom padding equals the panel's max height plus a margin.
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -586,15 +460,6 @@ fun MushafReaderScreen(
                 .padding(bottom = if (panelsVisible) 104.dp else 16.dp),
         )
 
-        // ── Floating auto-save indicator ─────────────────────
-        // Anchored at top-right with status-bar padding so it sits
-        // *above* the page WebP's decorative top border instead of
-        // landing on top of the calligraphy. The chip stays visible
-        // through the configurable countdown + saved-flash window
-        // and slides away once `AutoSaveTick.Idle` is emitted, so
-        // the user gets continuous "is my progress saving?" feedback
-        // while reading without the slide-down panel ever covering
-        // an ayah.
         AnimatedVisibility(
             visible = autoSaveTick !is AutoSaveTick.Idle,
             enter = fadeIn(animationSpec = Motion.standard()) +
@@ -609,17 +474,6 @@ fun MushafReaderScreen(
                 ),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                // Use `safeDrawing` (status bars + display cutouts +
-                // system gesture insets) restricted to the top and
-                // end edges so the chip never lands behind a notch /
-                // in-screen camera in landscape, never tucks under
-                // the gesture / nav inset on foldable inner panels,
-                // and never spills past the window edge in resizable
-                // (WSA / Chromebook / split-screen) layouts. The
-                // bare `statusBarsPadding()` only covered the top —
-                // the right edge inset was missing in landscape and
-                // narrow windows, which is what was clipping the
-                // chip in the bug report.
                 .windowInsetsPadding(
                     WindowInsets.safeDrawing.only(
                         WindowInsetsSides.Top + WindowInsetsSides.End,
@@ -631,15 +485,6 @@ fun MushafReaderScreen(
         }
     }
 
-    // ── Session Complete Splash ──────────────────────────────────
-    // Replaced the old `ModalBottomSheet` because M3's bottom-sheet
-    // sizing collided with the reader's `requestedOrientation`
-    // lock and resizable-display quirks (MuMu emulator,
-    // Chromebook, Samsung DeX), leaving the chip / button row
-    // clipped past the visible viewport in both portrait and
-    // landscape. A full-screen splash is immune to those quirks:
-    // it controls its own window, fills the viewport exactly, and
-    // adapts portrait/landscape via `BoxWithConstraints`.
     if (showSessionCompleteSheet) {
         SessionCompleteSplash(
             pagesRead = pagesReadInSession,
@@ -652,8 +497,6 @@ fun MushafReaderScreen(
         )
     }
 
-    // Editions catalogue dialog — opened from the chip in the
-    // translation panel header.
     if (showEditionsDialog) {
         TranslationEditionsDialog(
             editions = editions,
@@ -671,7 +514,6 @@ fun MushafReaderScreen(
         )
     }
 
-    // Unified navigate dialog — tabs for Surah+Ayah and Page.
     if (showNavigateDialog) {
         NavigateDialog(
             currentPage = currentPageNumber,
@@ -688,7 +530,6 @@ fun MushafReaderScreen(
         )
     }
 
-    // v3.0 / REQ-008: Memorization (Hifz) overlay
     if (showMemorizeOverlay) {
         val firstAyahOnPage = remember(currentPageNumber) {
             com.quranreader.custom.data.audio.AudioUrlResolver
@@ -710,35 +551,11 @@ fun MushafReaderScreen(
     }
 }
 
-// ── Slide-down panel (top) ──────────────────────────────────────────────────
-
-/**
- * Read-only context strip anchored to the top of the screen. Shows the
- * surah, the highlighted verse, the page number, and the juz. DPI-safe
- * symmetrical layout: close on the left, surah info centred, chips on
- * the right. A single **Navigate** button opens the unified jump
- * dialog (Surah+Ayah *or* Page tabs).
- *
- * Layout:
- *  - 280 ≤ width ≤ 480 dp, fills available width within those bounds.
- *  - 48 dp close button (Material a11y minimum).
- *  - Surah / ayah label takes a flexible weight so long surah names
- *    truncate with ellipsis instead of pushing the chips off-screen.
- *  - Page + Juz chips sit on the trailing edge; on compact screens
- *    (< 360 dp) they wrap below the surah label and the Navigate
- *    button sits centred at full width.
- */
 @Composable
 private fun TopInfoPanel(
     pageNumber: Int,
     surahNumber: Int,
     ayahNumber: Int,
-    /**
-     * Drives the auto-save chip rendered alongside the existing
-     * Page / Juz chips. Defaults to [AutoSaveTick.Idle] for previews
-     * so the chip degrades to a static "Saved" pill when no
-     * countdown is wired up.
-     */
     autoSaveTick: AutoSaveTick = AutoSaveTick.Idle,
     onClose: () -> Unit,
     onNavigate: () -> Unit,
@@ -756,7 +573,6 @@ private fun TopInfoPanel(
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // ── Row 1: Close | Surah info | Chips ──────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -809,7 +625,6 @@ private fun TopInfoPanel(
                 }
             }
 
-            // Compact screens: chips on a second row
             if (compact) {
                 Row(
                     modifier = Modifier
@@ -825,7 +640,6 @@ private fun TopInfoPanel(
                 }
             }
 
-            // ── Row 2: Single Navigate button (centred) ────────────
             Surface(
                 onClick = onNavigate,
                 shape = RoundedCornerShape(50),
@@ -856,14 +670,6 @@ private fun TopInfoPanel(
     }
 }
 
-/**
- * Three side-by-side context chips: page number, juz, and the
- * auto-save indicator. Pulled out so both the wide-and-narrow layouts
- * in [TopInfoPanel] share a single source of truth for the chips'
- * look. The auto-save chip is the same pill silhouette as the other
- * two so the row reads as one symmetrical group, with a small ring
- * of [CircularProgressIndicator] around its icon while counting down.
- */
 @Composable
 private fun InfoChipRow(
     pageNumber: Int,
@@ -914,32 +720,10 @@ private fun ContextChip(
     }
 }
 
-/**
- * Compact, corner-anchored auto-save indicator shown during reading
- * so the user gets continuous "is my progress saving?" feedback
- * without the slide-down panel ever covering an ayah. Three visual
- * modes — mirroring [AutoSaveTick] — share the same pill silhouette:
- *
- * - **Counting**: tiny [CircularProgressIndicator] ring around a
- *   save icon, plus a "3s, 2s, 1s" label so the user can see how
- *   much longer until the commit fires.
- * - **Saved**: same silhouette with a tertiary-tinted check-mark and
- *   the localised "Saved" label, lingering ~ 1.5 s after the persist.
- * - **Idle**: caller is expected to hide the indicator entirely;
- *   we still render a Saved-style pill defensively so a stale
- *   render doesn't show garbage.
- *
- * Sized small (icon ≈ 14 dp, padding ≈ 10/6 dp) so it fits in the
- * top-right corner above the page's decorative border without
- * landing on calligraphy.
- */
 @Composable
 private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
     val isCounting = state is AutoSaveTick.Counting
     val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
-    // BY_PAGES uses a different localised template ("%d pages" /
-    // "%d hlm") so the user can see at a glance that this is a
-    // page-flip countdown, not a seconds dwell timer.
     val label: String? = when (state) {
         is AutoSaveTick.Counting -> stringResource(
             if (state.byPages) R.string.mushaf_autosave_counting_pages
@@ -957,11 +741,6 @@ private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
         tonalElevation = 6.dp,
         shadowElevation = 4.dp,
-        // Cap the pill's max width so the label can't push the icon
-        // off-screen in tight windows (split-screen / WSA / narrow
-        // foldables) or under large font-scale accessibility settings.
-        // 160 dp comfortably fits "Saved" and "31 pages" / "31 hlm";
-        // longer strings ellipsise gracefully via the Text below.
         modifier = Modifier.widthIn(max = 160.dp),
     ) {
         Row(
@@ -969,8 +748,6 @@ private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Icon + optional ring share the same 14 dp footprint so
-            // the pill stays compact in the corner.
             Box(
                 modifier = Modifier.size(14.dp),
                 contentAlignment = Alignment.Center,
@@ -1006,22 +783,10 @@ private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
     }
 }
 
-/**
- * Auto-save status chip rendered alongside Page / Juz inside
- * [InfoChipRow]. Three visual modes — [AutoSaveTick.Counting],
- * [AutoSaveTick.Saved], and [AutoSaveTick.Idle] — share the exact
- * pill silhouette of [ContextChip] so the row reads as a single
- * symmetrical group. The countdown ring uses a 14-dp
- * [CircularProgressIndicator] sat behind the same 14-dp icon so the
- * ring + icon footprint matches the other chips' icons one-for-one.
- */
 @Composable
 private fun AutoSaveChip(state: AutoSaveTick) {
     val isCounting = state is AutoSaveTick.Counting
     val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
-    // BY_PAGES uses a different localised template ("%d pages" /
-    // "%d hlm") so the user can see at a glance that this is a
-    // page-flip countdown, not a seconds dwell timer.
     val label = when (state) {
         is AutoSaveTick.Counting -> stringResource(
             if (state.byPages) R.string.mushaf_autosave_counting_pages
@@ -1043,8 +808,6 @@ private fun AutoSaveChip(state: AutoSaveTick) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Icon + optional ring share the same 14 dp footprint so
-            // this chip's left-edge spacing aligns with Page / Juz.
             Box(
                 modifier = Modifier.size(14.dp),
                 contentAlignment = Alignment.Center,
@@ -1078,24 +841,6 @@ private fun AutoSaveChip(state: AutoSaveTick) {
     }
 }
 
-// ── Slide-up panel (bottom) ─────────────────────────────────────────────────
-
-/**
- * Action strip anchored to the bottom of the screen. The bookmark
- * icon binds to the *highlighted ayah*, not the page — toggling 2:255
- * does not affect 2:256 even when both are bookmarked on the same
- * page. The audio button still drives page-level playback (matches
- * the existing AudioService API), but the rest of the controls
- * operate on the selected verse.
- *
- * Six evenly-spaced 48 dp icon buttons fit comfortably on the
- * narrowest supported device (5" / 360 dp); the row is wrapped in
- * `horizontalScroll` as a safety net for very small screens.
- *
- * The orientation toggle cycles AUTO → PORTRAIT → LANDSCAPE so the
- * user can pin the reader into landscape (zoomed mushaf view) without
- * flipping the system's global rotation lock.
- */
 @Composable
 private fun BottomActionPanel(
     isBookmarked: Boolean,
@@ -1103,83 +848,124 @@ private fun BottomActionPanel(
     isTranslateOpen: Boolean,
     isMemorizeOpen: Boolean,
     readerOrientation: ReaderOrientation,
+    isLandscape: Boolean = false,
+    landscapeZoom: Float = 1f,
     onBack: () -> Unit,
     onBookmarkToggle: () -> Unit,
     onTranslateToggle: () -> Unit,
     onAudioToggle: () -> Unit,
     onMemorizeToggle: () -> Unit,
     onOrientationCycle: () -> Unit,
+    onZoomIn: () -> Unit = {},
+    onZoomOut: () -> Unit = {},
+    onZoomReset: () -> Unit = {},
 ) {
     PanelSurface(
         modifier = Modifier.fillMaxWidth(),
     ) { compact ->
-        // 6 × 48dp icon buttons + spacing comfortably fits a 360dp
-        // screen but starts to crowd on `sw320dp` devices (e.g. small
-        // pre-Pixel handsets, foldable inner panels). Wrapping the
-        // row in `horizontalScroll` on the compact breakpoint lets
-        // the user pan past any clipped chrome instead of having
-        // touches eat each other; on standard-size phones the
-        // arrangement stays `SpaceEvenly` and never triggers the
-        // scroll because the row already fits.
-        val rowModifier = if (compact) {
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-        } else {
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-        }
-        Row(
-            modifier = rowModifier,
-            horizontalArrangement = if (compact) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            PanelIconButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = stringResource(R.string.mushaf_action_back),
-                active = false,
-                onClick = onBack,
-            )
-            PanelIconButton(
-                icon = Icons.Default.Translate,
-                contentDescription = stringResource(R.string.mushaf_action_translate),
-                active = isTranslateOpen,
-                onClick = onTranslateToggle,
-            )
-            PanelIconButton(
-                icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = stringResource(
-                    if (isPlaying) R.string.mushaf_action_audio_pause
-                    else R.string.mushaf_action_audio_play,
-                ),
-                active = isPlaying,
-                onClick = onAudioToggle,
-            )
-            PanelIconButton(
-                icon = Icons.Default.AutoAwesome,
-                contentDescription = stringResource(R.string.mushaf_action_memorize),
-                active = isMemorizeOpen,
-                onClick = onMemorizeToggle,
-            )
-            OrientationToggleButton(
-                orientation = readerOrientation,
-                onClick = onOrientationCycle,
-            )
-            BookmarkIconButton(
-                isBookmarked = isBookmarked,
-                onClick = onBookmarkToggle,
-            )
+            if (isLandscape) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                ) {
+                    PanelIconButton(
+                        icon = Icons.Default.ZoomOut,
+                        contentDescription = stringResource(R.string.reading_zoom_out),
+                        active = landscapeZoom < 1f,
+                        onClick = onZoomOut,
+                    )
+                    Surface(
+                        onClick = onZoomReset,
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest
+                            .copy(alpha = 0.45f),
+                        modifier = Modifier
+                            .height(36.dp)
+                            .padding(horizontal = 8.dp),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        ) {
+                            Text(
+                                text = "${(landscapeZoom * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                    PanelIconButton(
+                        icon = Icons.Default.ZoomIn,
+                        contentDescription = stringResource(R.string.reading_zoom_in),
+                        active = landscapeZoom > 1f,
+                        onClick = onZoomIn,
+                    )
+                }
+            }
+
+            val rowModifier = if (compact) {
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            }
+            Row(
+                modifier = rowModifier,
+                horizontalArrangement = if (compact) Arrangement.spacedBy(4.dp) else Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PanelIconButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.mushaf_action_back),
+                    active = false,
+                    onClick = onBack,
+                )
+                PanelIconButton(
+                    icon = Icons.Default.Translate,
+                    contentDescription = stringResource(R.string.mushaf_action_translate),
+                    active = isTranslateOpen,
+                    onClick = onTranslateToggle,
+                )
+                PanelIconButton(
+                    icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = stringResource(
+                        if (isPlaying) R.string.mushaf_action_audio_pause
+                        else R.string.mushaf_action_audio_play,
+                    ),
+                    active = isPlaying,
+                    onClick = onAudioToggle,
+                )
+                PanelIconButton(
+                    icon = Icons.Default.AutoAwesome,
+                    contentDescription = stringResource(R.string.mushaf_action_memorize),
+                    active = isMemorizeOpen,
+                    onClick = onMemorizeToggle,
+                )
+                OrientationToggleButton(
+                    orientation = readerOrientation,
+                    onClick = onOrientationCycle,
+                )
+                BookmarkIconButton(
+                    isBookmarked = isBookmarked,
+                    onClick = onBookmarkToggle,
+                )
+            }
         }
     }
 }
 
-/**
- * Cycles AUTO → PORTRAIT → LANDSCAPE. Icon swaps to communicate the
- * *current* state, not the *next* — users tend to read the icon as
- * "what am I locked into right now".
- */
 @Composable
 private fun OrientationToggleButton(
     orientation: ReaderOrientation,
@@ -1198,26 +984,6 @@ private fun OrientationToggleButton(
     )
 }
 
-// ── Shared panel chrome ─────────────────────────────────────────────────────
-
-/**
- * Translucent surface used by both reader panels. Replaces the
- * previous Haze-backed frosted-glass effect with a regular Material 3
- * surface tinted at 92% alpha — looks closer to a native Android panel
- * and renders identically on every API level (no Android 12+
- * `RenderEffect` requirement).
- *
- * Wraps a `BoxWithConstraints` so child content can adapt to a
- * `compact` (< 360 dp) breakpoint without a second measure pass. The
- * width follows the shared [responsivePanelMaxWidth] tier table so
- * phones and tablets all stay visually consistent — the panel never
- * fills the full width of a 10" tablet (which would dwarf the
- * mushaf), and on compact handsets it still spans 92% of the screen.
- * Height grows with content; min-height is enforced by the children
- * (touch targets are 48 dp). The inner Surface is centred horizontally
- * so the panel hovers in the middle of wider screens instead of
- * left-anchoring against the start edge.
- */
 @Composable
 private fun PanelSurface(
     modifier: Modifier = Modifier,
@@ -1262,13 +1028,6 @@ private fun PanelSurface(
     }
 }
 
-/**
- * Square IconButton tuned for the reader panels: 48 dp touch target
- * (Material a11y minimum) with a 22 dp glyph. Tints flip between
- * `onSurface @ 85%` and `primary` based on the [active] flag, which
- * the panels use to communicate "translation sheet open", "audio
- * playing", etc.
- */
 @Composable
 private fun PanelIconButton(
     icon: ImageVector,
@@ -1294,13 +1053,6 @@ private fun PanelIconButton(
     }
 }
 
-/**
- * Bookmark variant of [PanelIconButton]. Has its own composable
- * because the icon swaps (Bookmark ↔ BookmarkBorder) and gets a
- * scale-on-press animation we don't want firing on the other
- * controls — it's the panel's most "celebratory" interaction so it
- * earns the micro-bounce.
- */
 @Composable
 private fun BookmarkIconButton(
     isBookmarked: Boolean,
@@ -1339,16 +1091,6 @@ private fun BookmarkIconButton(
     }
 }
 
-// ── Unified Navigate Dialog ────────────────────────────────────────────────
-
-/**
- * Single dialog with two tabs: **Surah & Ayah** (opens the full
- * [AyahSearchDialog] inline) and **Page** (numeric 1–604 input).
- *
- * DPI-adaptive: width = min(92% of window, 480 dp) ≥ 280 dp;
- * height = min(85% of window, 640 dp). Renders identically from
- * 5" phones to 12" tablets.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NavigateDialog(
@@ -1388,7 +1130,6 @@ private fun NavigateDialog(
                 shadowElevation = 8.dp,
             ) {
                 Column {
-                    // ── Title + close ─────────────────────────────
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1416,7 +1157,6 @@ private fun NavigateDialog(
                         }
                     }
 
-                    // ── Tab row ───────────────────────────────────
                     val tabTitles = listOf(
                         stringResource(R.string.mushaf_navigate_tab_ayah),
                         stringResource(R.string.mushaf_navigate_tab_page),
@@ -1442,10 +1182,8 @@ private fun NavigateDialog(
                         }
                     }
 
-                    // ── Tab content ───────────────────────────────
                     when (selectedTab) {
                         0 -> {
-                            // Surah & Ayah tab — opens AyahSearchDialog
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1479,7 +1217,6 @@ private fun NavigateDialog(
                             }
                         }
                         1 -> {
-                            // Page tab — simple numeric input
                             var pageInput by rememberSaveable {
                                 mutableStateOf(currentPage.toString())
                             }
@@ -1523,7 +1260,6 @@ private fun NavigateDialog(
         }
     }
 
-    // Surah & Ayah picker — opens on top of the navigate dialog
     if (showAyahSearchDialog) {
         AyahSearchDialog(
             onDismiss = { showAyahSearchDialog = false },
@@ -1535,23 +1271,6 @@ private fun NavigateDialog(
     }
 }
 
-// ── Session Complete Splash ──────────────────────────────────────
-/**
- * Full-screen "session complete" splash overlay that replaces the
- * old `ModalBottomSheet`.
- *
- * Rendered as a direct composable overlay (no `Dialog` window) so
- * it inherits the parent size exactly and avoids platform dialog
- * sizing quirks across orientations. `BackHandler` handles
- * back-press dismissal.
- *
- * The layout adapts on two axes:
- *  - **Width** caps the content column at 480 dp so wide screens
- *    (landscape phone, tablet) stay readable.
- *  - **Height** picks a compact hero / spacing variant when the
- *    visible viewport is shorter than 480 dp (landscape phone,
- *    foldable cover) and stays scrollable as a fallback.
- */
 @Composable
 private fun SessionCompleteSplash(
     pagesRead: Int,
@@ -1562,9 +1281,6 @@ private fun SessionCompleteSplash(
     val context = androidx.compose.ui.platform.LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
 
-    // Software blur fallback for API < 31 where Modifier.blur() is
-    // a no-op. Captures the current view, downscales, applies a
-    // two-pass box blur, and displays it behind the scrim.
     val softwareBlurBg = remember {
         if (android.os.Build.VERSION.SDK_INT >= 31) return@remember null
         try {
@@ -1577,12 +1293,9 @@ private fun SessionCompleteSplash(
         }
     }
 
-    // Back press closes the splash (same as tapping "Close").
     BackHandler(onBack = onClose)
 
     Box(Modifier.fillMaxSize()) {
-        // Blurred background image (API < 31 only; on 31+ the
-        // main content Box already has Modifier.blur applied).
         softwareBlurBg?.let { bmp ->
             Image(
                 bitmap = bmp,
@@ -1596,10 +1309,6 @@ private fun SessionCompleteSplash(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.75f)),
         ) {
-            // Compact-height layout for landscape phone (visible
-            // viewport ~ 360 × 720 dp portrait flips to 720 × 360
-            // dp landscape on most devices). The threshold is
-            // Material's small-screen bound for large vertical UI.
             val isCompactHeight = maxHeight < 480.dp
             val heroSize = if (isCompactHeight) 88.dp else 120.dp
             val heroIconSize = if (isCompactHeight) 48.dp else 64.dp
@@ -1617,14 +1326,10 @@ private fun SessionCompleteSplash(
                     .widthIn(max = 480.dp)
                     .align(Alignment.Center)
                     .verticalScroll(rememberScrollState())
-                    // safeDrawing keeps the splash clear of
-                    // status bar, navigation bar, gesture insets
-                    // and display cutouts on every form factor.
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = 24.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Hero — circular primary-container with a check.
                 Box(
                     modifier = Modifier
                         .size(heroSize)
@@ -1641,7 +1346,6 @@ private fun SessionCompleteSplash(
                 }
                 Spacer(Modifier.height(verticalGapHero))
 
-                // Title.
                 Text(
                     text = context.getString(R.string.session_complete_title),
                     style = titleStyle,
@@ -1651,7 +1355,6 @@ private fun SessionCompleteSplash(
                 )
                 Spacer(Modifier.height(8.dp))
 
-                // Subtitle — affirming copy under the title.
                 Text(
                     text = context.getString(R.string.session_complete_subtitle),
                     style = MaterialTheme.typography.bodyLarge,
@@ -1660,7 +1363,6 @@ private fun SessionCompleteSplash(
                 )
                 Spacer(Modifier.height(verticalGapStats))
 
-                // Stats card — pages | divider | minutes.
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
@@ -1698,7 +1400,6 @@ private fun SessionCompleteSplash(
                 }
                 Spacer(Modifier.height(verticalGapButtons))
 
-                // Primary action — Continue Reading.
                 Button(
                     onClick = onContinue,
                     modifier = Modifier
@@ -1719,7 +1420,6 @@ private fun SessionCompleteSplash(
                 }
                 Spacer(Modifier.height(8.dp))
 
-                // Secondary action — Close.
                 TextButton(
                     onClick = onClose,
                     modifier = Modifier.fillMaxWidth(),
@@ -1733,7 +1433,6 @@ private fun SessionCompleteSplash(
         }
     }
 }
-// ── End Session Complete Splash ────────────────────────────────────
 
 @Composable
 private fun SplashStat(
@@ -1771,15 +1470,6 @@ private fun SplashStat(
     }
 }
 
-// ── Software blur (API < 31 fallback) ──────────────────────────────
-/**
- * Downscale → two-pass box blur → return small [android.graphics.Bitmap].
- * The caller's [Image] composable upscales with bilinear filtering,
- * which adds extra smoothing on top of the algorithmic blur.
- *
- * Runs in ≈ 2-5 ms on a modern device (operates on ~1/64th of the
- * original pixel count).
- */
 private fun softwareBlur(
     source: android.graphics.Bitmap,
     radius: Int = 25,

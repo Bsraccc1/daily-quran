@@ -29,6 +29,9 @@
     <string name="reading_remove_bookmark">Hapus Penanda</string>
     <string name="reading_go_to_page">Ke Halaman</string>
     <string name="reading_settings">Pengaturan Baca</string>
+    <string name="reading_zoom_in">Perbesar</string>
+    <string name="reading_zoom_out">Perkecil</string>
+    <string name="reading_zoom_reset">Atur ulang zoom</string>
     
     <!-- Session Management -->
     <string name="session_active">Sesi Aktif</string>
