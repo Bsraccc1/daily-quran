@@ -9,8 +9,10 @@ import com.quranreader.custom.data.audio.download.AudioCacheManager
 import com.quranreader.custom.data.audio.timing.AyahTimingApi
 import com.quranreader.custom.data.audio.timing.AyahTimingDao
 import com.quranreader.custom.data.memorization.MemorizationSessionDao
+import com.quranreader.custom.data.local.ArabicVerseDao
 import com.quranreader.custom.data.local.AyahCoordinateDao
 import com.quranreader.custom.data.local.RecitationDao
+import com.quranreader.custom.data.local.TransliterationDao
 import com.quranreader.custom.data.local.TranslationEditionDao
 import com.quranreader.custom.data.remote.QuranComApi
 import retrofit2.Retrofit
@@ -47,7 +49,8 @@ object AppModule {
             QuranDatabase.MIGRATION_5_6,
             QuranDatabase.MIGRATION_6_7,
             QuranDatabase.MIGRATION_7_8,
-            QuranDatabase.MIGRATION_8_9
+            QuranDatabase.MIGRATION_8_9,
+            QuranDatabase.MIGRATION_9_10
         )
         .fallbackToDestructiveMigration()
         .build()
@@ -145,6 +148,18 @@ object AppModule {
     @Singleton
     fun provideRecitationDao(database: QuranDatabase): RecitationDao {
         return database.recitationDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideArabicVerseDao(database: QuranDatabase): ArabicVerseDao {
+        return database.arabicVerseDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTransliterationDao(database: QuranDatabase): TransliterationDao {
+        return database.transliterationDao()
     }
 
     /**

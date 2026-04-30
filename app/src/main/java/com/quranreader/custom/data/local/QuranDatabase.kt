@@ -10,9 +10,11 @@ import com.quranreader.custom.data.audio.timing.AyahTiming
 import com.quranreader.custom.data.audio.timing.AyahTimingDao
 import com.quranreader.custom.data.memorization.MemorizationSession
 import com.quranreader.custom.data.memorization.MemorizationSessionDao
+import com.quranreader.custom.data.model.ArabicVerse
 import com.quranreader.custom.data.model.Bookmark
 import com.quranreader.custom.data.model.AyahCoordinate
 import com.quranreader.custom.data.model.Recitation
+import com.quranreader.custom.data.model.Transliteration
 import com.quranreader.custom.data.model.TranslationEdition
 import com.quranreader.custom.data.model.TranslationText
 
@@ -25,9 +27,11 @@ import com.quranreader.custom.data.model.TranslationText
         Recitation::class,
         DownloadedSurah::class,
         AyahTiming::class,
-        MemorizationSession::class
+        MemorizationSession::class,
+        ArabicVerse::class,
+        Transliteration::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class QuranDatabase : RoomDatabase() {
@@ -39,6 +43,8 @@ abstract class QuranDatabase : RoomDatabase() {
     abstract fun downloadedSurahDao(): DownloadedSurahDao
     abstract fun ayahTimingDao(): AyahTimingDao
     abstract fun memorizationSessionDao(): MemorizationSessionDao
+    abstract fun arabicVerseDao(): ArabicVerseDao
+    abstract fun transliterationDao(): TransliterationDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -198,6 +204,41 @@ abstract class QuranDatabase : RoomDatabase() {
                            CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END,
                            COUNT(*), $now
                     FROM translations WHERE editionId = 33
+                """)
+            }
+        }
+
+        /**
+         * v10 — introduce per-verse Arabic text (`arabic_verses`) and
+         * per-language transliteration (`transliterations`). Both
+         * tables are content tables — keys are (surah, ayah) plus
+         * languageCode for transliteration. Purely additive: zero
+         * impact on user data already in v9 (bookmarks, sessions,
+         * translations, etc.). The `arabic_verses` table is populated
+         * post-migration by [com.quranreader.custom.data.seed.ArabicVerseSeeder]
+         * from the bundled `assets/quran_data/quran_uthmani.json`.
+         * Transliterations are populated lazily by
+         * `TransliterationRepository` on the first juz-read in
+         * Translation mode.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS arabic_verses (
+                        surahNumber INTEGER NOT NULL,
+                        ayahNumber  INTEGER NOT NULL,
+                        textUthmani TEXT NOT NULL,
+                        PRIMARY KEY (surahNumber, ayahNumber)
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS transliterations (
+                        surahNumber INTEGER NOT NULL,
+                        ayahNumber  INTEGER NOT NULL,
+                        languageCode TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        PRIMARY KEY (surahNumber, ayahNumber, languageCode)
+                    )
                 """)
             }
         }
