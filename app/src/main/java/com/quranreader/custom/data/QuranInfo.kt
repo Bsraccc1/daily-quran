@@ -535,4 +535,90 @@ object QuranInfo {
         }
         return juz
     }
+
+    // ── Juz boundaries by (surah, ayah) ─────────────────────────────────────
+    // Standard Tanzil / Quran.com juz table. Index [j-1] holds the
+    // first (surahNumber, ayahNumber) of juz `j`. Used by [juzOf] and
+    // [juzAyahRanges] for the Translation reader (per-juz pager).
+    private val juzStartSurahAyah: Array<Pair<Int, Int>> = arrayOf(
+        1 to 1,    // Juz 1
+        2 to 142,  // Juz 2
+        2 to 253,  // Juz 3
+        3 to 93,   // Juz 4
+        4 to 24,   // Juz 5
+        4 to 148,  // Juz 6
+        5 to 82,   // Juz 7
+        6 to 111,  // Juz 8
+        7 to 88,   // Juz 9
+        8 to 41,   // Juz 10
+        9 to 93,   // Juz 11
+        11 to 6,   // Juz 12
+        12 to 53,  // Juz 13
+        15 to 1,   // Juz 14
+        17 to 1,   // Juz 15
+        18 to 75,  // Juz 16
+        21 to 1,   // Juz 17
+        23 to 1,   // Juz 18
+        25 to 21,  // Juz 19
+        27 to 56,  // Juz 20
+        29 to 46,  // Juz 21
+        33 to 31,  // Juz 22
+        36 to 28,  // Juz 23
+        39 to 32,  // Juz 24
+        41 to 47,  // Juz 25
+        46 to 1,   // Juz 26
+        51 to 31,  // Juz 27
+        58 to 1,   // Juz 28
+        67 to 1,   // Juz 29
+        78 to 1,   // Juz 30
+    )
+
+    /**
+     * Returns the Juz number (1..30) containing `(surah, ayah)`.
+     * Linear scan — `juzStartSurahAyah` is only 30 entries, no need for
+     * binary search.
+     */
+    fun juzOf(surah: Int, ayah: Int): Int {
+        var juz = 1
+        for (j in juzStartSurahAyah.indices) {
+            val (s, a) = juzStartSurahAyah[j]
+            // Juz j contains everything from juzStart[j] up to (and
+            // excluding) juzStart[j+1]. Comparator: `(s, a) <= (surah,
+            // ayah)` lexicographically by surah then ayah.
+            if (s < surah || (s == surah && a <= ayah)) juz = j + 1
+            else break
+        }
+        return juz
+    }
+
+    /**
+     * Returns the contiguous (surah, fromAyah, toAyah) ranges that
+     * make up the given juz. A juz can span multiple surahs — this
+     * splits the juz into per-surah slices the Translation reader
+     * iterates over to fetch ArabicVerse rows from Room.
+     *
+     * Example: juz 1 = `[(1, 1, 7), (2, 1, 141)]` (full Al-Fatihah +
+     * Al-Baqarah verses 1..141).
+     */
+    fun juzAyahRanges(juz: Int): List<Triple<Int, Int, Int>> {
+        if (juz < 1 || juz > 30) return emptyList()
+        val (startSurah, startAyah) = juzStartSurahAyah[juz - 1]
+        val (endSurah, endAyahExclusive) = if (juz == 30) {
+            // Last juz ends at 114:6 (last verse of An-Nas). Encode as
+            // exclusive end at (115, 1).
+            115 to 1
+        } else {
+            juzStartSurahAyah[juz]
+        }
+        val out = ArrayList<Triple<Int, Int, Int>>()
+        var s = startSurah
+        var fromAyah = startAyah
+        while (s < endSurah || (s == endSurah && fromAyah < endAyahExclusive)) {
+            val toAyah = if (s == endSurah) endAyahExclusive - 1 else getAyahCount(s)
+            out += Triple(s, fromAyah, toAyah)
+            s += 1
+            fromAyah = 1
+        }
+        return out
+    }
 }
