@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.quranreader.custom.data.memorization.MemorizationRepository
 import com.quranreader.custom.data.preferences.AutoSaveMode
 import com.quranreader.custom.data.preferences.DisplayMode
+import com.quranreader.custom.data.preferences.ReadingMode
 import com.quranreader.custom.data.preferences.UserPreferences
 import com.quranreader.custom.data.repository.BookmarkRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +53,25 @@ class SettingsViewModel @Inject constructor(
     fun setThemeId(id: String) {
         viewModelScope.launch {
             userPreferences.setThemeId(id)
+        }
+    }
+
+    // ── Reading Mode (v10) ───────────────────────────────────────────────────
+    /**
+     * Reader presentation style. Bound to the Reading Style chip
+     * pair in the Reading section of Settings. Default
+     * [ReadingMode.MUSHAF] mirrors the bundled-WebP reader every
+     * pre-v10 user already knows.
+     */
+    val readingMode = userPreferences.readingMode.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ReadingMode.MUSHAF
+    )
+
+    fun setReadingMode(mode: ReadingMode) {
+        viewModelScope.launch {
+            userPreferences.setReadingMode(mode)
         }
     }
 

@@ -26,12 +26,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.quranreader.custom.data.QuranInfo
+import com.quranreader.custom.data.preferences.ReadingMode
 import com.quranreader.custom.ui.screens.bookmarks.BookmarksScreen
 import com.quranreader.custom.ui.screens.downloads.ManageDownloadsScreen
 import com.quranreader.custom.ui.screens.home.DashboardScreen
 import com.quranreader.custom.ui.screens.juz.JuzScreen
 import com.quranreader.custom.ui.screens.memorization.MemorizationHistoryScreen
 import com.quranreader.custom.ui.screens.reading.MushafReaderScreen
+import com.quranreader.custom.ui.screens.reading.TranslationReaderScreen
 import com.quranreader.custom.ui.screens.session.SessionManagementScreen
 import com.quranreader.custom.ui.screens.settings.SettingsScreen
 import com.quranreader.custom.ui.viewmodel.SettingsViewModel
@@ -61,6 +64,13 @@ sealed class Screen(val route: String) {
     object MushafReaderWithSession : Screen("mushaf_session/{page}?startPage={startPage}&targetPages={targetPages}") {
         fun createRoute(page: Int, startPage: Int = page, targetPages: Int = 0) =
             "mushaf_session/$page?startPage=$startPage&targetPages=$targetPages"
+    }
+    /**
+     * v10 Translation reader. Optional `juz` query arg seeds the
+     * initial pager page (1..30); falls back to juz 1.
+     */
+    object TranslationReader : Screen("translation?juz={juz}") {
+        fun createRoute(juz: Int = 1) = "translation?juz=${juz.coerceIn(1, 30)}"
     }
     object Juz : Screen("juz")
     object Sessions : Screen("sessions")
@@ -97,11 +107,33 @@ private val bottomBarRoutes = bottomNavItems.map { it.route }.toSet()
 fun QuranNavGraph(
     navController: NavHostController = rememberNavController()
 ) {
-    @Suppress("UNUSED_VARIABLE")
     val settingsViewModel: SettingsViewModel = hiltViewModel()
+    val readingMode by settingsViewModel.readingMode.collectAsState()
     // v4.1: every page is bundled as an asset (assets/pages_madinah/page_NNN.jpg),
     // so there is no first-launch download flow. Boot straight into Reading.
     val startDestination = Screen.Reading.route
+
+    /**
+     * Mode-aware "open the reader" router. Centralizes the
+     * Mushaf-vs-Translation decision so every CTA (Continue Reading,
+     * Juz tile, Bookmark row, Surah search) goes through one helper.
+     */
+    fun openReader(page: Int, surah: Int = 0, ayah: Int = 0) {
+        when (readingMode) {
+            ReadingMode.MUSHAF -> {
+                navController.navigate(Screen.MushafReader.createRoute(page, surah, ayah)) {
+                    launchSingleTop = true
+                }
+            }
+            ReadingMode.TRANSLATION -> {
+                val s = if (surah > 0) surah else 1
+                val a = if (ayah > 0) ayah else 1
+                navController.navigate(Screen.TranslationReader.createRoute(QuranInfo.juzOf(s, a))) {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -153,13 +185,14 @@ fun QuranNavGraph(
                     // the user has resolved a verse, jumping straight
                     // to the reader pre-highlighted.
                     onNavigateToAyah = { page, surah, ayah ->
-                        navController.navigate(
-                            Screen.MushafReader.createRoute(page, surah, ayah)
-                        ) {
-                            launchSingleTop = true
-                        }
+                        openReader(page = page, surah = surah, ayah = ayah)
                     },
                     onNavigateToMushafWithSession = { page, startPage, targetPages ->
+                        // Auto-session is a Mushaf-only flow (the
+                        // Translation reader has no notion of "target
+                        // pages" yet). Force Mushaf so the session
+                        // setup the user just confirmed actually
+                        // applies.
                         navController.navigate(
                             Screen.MushafReaderWithSession.createRoute(
                                 page = page,
@@ -177,10 +210,9 @@ fun QuranNavGraph(
             composable(Screen.Juz.route) {
                 JuzScreen(
                     onNavigateToReading = { page ->
-                        // Navigate directly to Mushaf Reader
-                        navController.navigate(Screen.MushafReader.createRoute(page)) {
-                            launchSingleTop = true
-                        }
+                        // Mode-aware — Mushaf goes to page; Translation
+                        // routes to the corresponding juz.
+                        openReader(page = page)
                     }
                 )
             }
@@ -211,10 +243,9 @@ fun QuranNavGraph(
             composable(Screen.Bookmarks.route) {
                 BookmarksScreen(
                     onNavigateToReading = { page ->
-                        // Navigate directly to Mushaf Reader
-                        navController.navigate(Screen.MushafReader.createRoute(page)) {
-                            launchSingleTop = true
-                        }
+                        // Mode-aware navigation — preserves user's
+                        // chosen reader between flips.
+                        openReader(page = page)
                     }
                 )
             }
@@ -270,6 +301,36 @@ fun QuranNavGraph(
                             launchSingleTop = true
                         }
                     }
+                )
+            }
+
+            // ── Secondary: Translation Reader (v10) ──────────────────────────
+            composable(
+                route = Screen.TranslationReader.route,
+                arguments = listOf(
+                    navArgument("juz") {
+                        type = NavType.IntType
+                        defaultValue = 1
+                    }
+                )
+            ) { backStackEntry ->
+                val juz = backStackEntry.arguments?.getInt("juz")?.coerceIn(1, 30) ?: 1
+                TranslationReaderScreen(
+                    initialJuz = juz,
+                    onBack = { navController.popBackStack() },
+                    onSwitchToMushaf = { surah, ayah ->
+                        // Translate the (surah, ayah) anchor to a
+                        // mushaf page using the same `getStartPage`
+                        // table the rest of the app uses; the
+                        // TranslationReaderViewModel.PositionMapper
+                        // is the more accurate path but requires a
+                        // DAO — defer to the static lookup here.
+                        val s = if (surah > 0) surah else 1
+                        val page = QuranInfo.getStartPage(s)
+                        navController.navigate(
+                            Screen.MushafReader.createRoute(page, s, ayah.coerceAtLeast(1))
+                        ) { launchSingleTop = true }
+                    },
                 )
             }
 

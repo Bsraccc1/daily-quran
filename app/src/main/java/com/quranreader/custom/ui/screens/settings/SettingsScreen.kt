@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.quranreader.custom.R
 import com.quranreader.custom.data.audio.Reciters
 import com.quranreader.custom.data.preferences.AutoSaveMode
+import com.quranreader.custom.data.preferences.ReadingMode
 import com.quranreader.custom.ui.MainActivity
 import com.quranreader.custom.ui.components.animated.ExpandableSection
 import com.quranreader.custom.ui.viewmodel.AudioViewModel
@@ -252,6 +253,7 @@ fun SettingsScreen(
             LaunchedEffect(autoSavePageCount) {
                 autoSavePagesInput = autoSavePageCount.toString()
             }
+            val readingMode by viewModel.readingMode.collectAsState()
             SettingsCard {
                 ExpandableSection(
                     title = "Reading",
@@ -259,6 +261,63 @@ fun SettingsScreen(
                     initiallyExpanded = false
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+
+                        // ── Reading Style ────────────────────────────
+                        // Picks between Mushaf (page-by-page WebP) and
+                        // Translation (per-juz scrollable verse list).
+                        // Lives at the top of the Reading section because
+                        // it gates which reader the rest of the settings
+                        // (auto-save, page limits, etc.) apply to.
+                        Text(
+                            stringResource(R.string.settings_reading_style_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.settings_reading_style_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = readingMode == ReadingMode.MUSHAF,
+                                onClick = { viewModel.setReadingMode(ReadingMode.MUSHAF) },
+                                label = {
+                                    Text(stringResource(R.string.settings_reading_mode_mushaf))
+                                },
+                                leadingIcon = if (readingMode == ReadingMode.MUSHAF) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                            )
+                            FilterChip(
+                                selected = readingMode == ReadingMode.TRANSLATION,
+                                onClick = { viewModel.setReadingMode(ReadingMode.TRANSLATION) },
+                                label = {
+                                    Text(stringResource(R.string.settings_reading_mode_translation))
+                                },
+                                leadingIcon = if (readingMode == ReadingMode.TRANSLATION) {
+                                    {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Divider()
+                        Spacer(Modifier.height(16.dp))
+
                         Text(
                             "Pages per 'Continue Reading'",
                             style = MaterialTheme.typography.titleSmall,
