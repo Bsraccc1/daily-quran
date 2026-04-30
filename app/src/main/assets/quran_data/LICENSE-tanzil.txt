@@ -1,0 +1,14 @@
+Quran Uthmani text bundled with this application is sourced from the
+Tanzil Project (https://tanzil.net) and distributed under Tanzil terms.
+
+Attribution is rendered in the app's About screen alongside the Mushaf
+Madinah image attribution.
+
+NOTE FOR DEVELOPERS:
+This file currently contains a 3-verse fixture (Al-Fatihah 1-3) only,
+sufficient for end-to-end UI smoke testing of the Translation reader.
+
+Before shipping a production release, replace `quran_uthmani.json` with
+the full 6,236-ayah file generated from a verified Tanzil text export.
+The cross-validation against `ayahinfo.db` ayah counts is a tracked
+follow-up task — see plan §"Production follow-up".
