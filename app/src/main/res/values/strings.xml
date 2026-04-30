@@ -262,4 +262,19 @@
     <string name="search_ayah_field_ayah_disabled">Pick a surah first</string>
     <string name="search_ayah_cancel">Cancel</string>
     <string name="search_ayah_pick_surah_title">Pick a Surah</string>
+
+    <!-- Reading Mode (v10) -->
+    <string name="settings_reading_style_title">Reading Style</string>
+    <string name="settings_reading_style_subtitle">How verses are presented when you open the reader</string>
+    <string name="settings_reading_mode_mushaf">Mushaf</string>
+    <string name="settings_reading_mode_translation">Translation</string>
+    <string name="reader_toggle_mode">Switch reading mode</string>
+    <string name="reader_translation_title">Juz %1$d</string>
+    <string name="reader_translation_loading">Loading translation…</string>
+    <string name="reader_translation_unavailable">Translation not yet downloaded</string>
+    <string name="reader_translation_arabic_unavailable">Arabic text not yet bundled for juz %1$d</string>
+    <string name="reader_action_play">Play</string>
+    <string name="reader_action_bookmark">Bookmark</string>
+    <string name="reader_action_share">Share</string>
+    <string name="reader_action_jump_to_mushaf">Open in Mushaf</string>
 </resources>

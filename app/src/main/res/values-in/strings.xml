@@ -260,4 +260,19 @@
     <string name="search_ayah_field_ayah_disabled">Pilih surah terlebih dahulu</string>
     <string name="search_ayah_cancel">Batal</string>
     <string name="search_ayah_pick_surah_title">Pilih Surah</string>
+
+    <!-- Reading Mode (v10) -->
+    <string name="settings_reading_style_title">Gaya Bacaan</string>
+    <string name="settings_reading_style_subtitle">Cara ayat ditampilkan saat Anda membuka pembaca</string>
+    <string name="settings_reading_mode_mushaf">Mushaf</string>
+    <string name="settings_reading_mode_translation">Terjemahan</string>
+    <string name="reader_toggle_mode">Ganti mode bacaan</string>
+    <string name="reader_translation_title">Juz %1$d</string>
+    <string name="reader_translation_loading">Memuat terjemahan…</string>
+    <string name="reader_translation_unavailable">Terjemahan belum diunduh</string>
+    <string name="reader_translation_arabic_unavailable">Teks Arab belum tersedia untuk juz %1$d</string>
+    <string name="reader_action_play">Putar</string>
+    <string name="reader_action_bookmark">Markah</string>
+    <string name="reader_action_share">Bagikan</string>
+    <string name="reader_action_jump_to_mushaf">Buka di Mushaf</string>
 </resources>
