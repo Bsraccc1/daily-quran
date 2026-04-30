@@ -144,6 +144,16 @@ class UserPreferences @Inject constructor(
 
         // ── v3.0: Onboarding ──────────────────────────────────────────────
         private val V3_ONBOARDING_SHOWN_KEY   = booleanPreferencesKey("v3_onboarding_shown")
+
+        // ── Reading Mode (v10) ─────────────────────────────────────────────
+        // Picks between Mushaf (page-by-page WebP) and Translation
+        // (per-juz scrollable verse list). Persisted as the enum name.
+        private val READING_MODE_KEY          = stringPreferencesKey("reading_mode")
+        // Last-read (surah, ayah) — single source of truth across both
+        // readers. The legacy LAST_PAGE_KEY is still written by the
+        // mushaf reader so the Continue Reading CTA keeps working.
+        private val LAST_SURAH_KEY            = intPreferencesKey("last_surah")
+        private val LAST_AYAH_KEY             = intPreferencesKey("last_ayah")
     }
 
     // ── v3.0 onboarding flag ──────────────────────────────────────────────
@@ -155,6 +165,32 @@ class UserPreferences @Inject constructor(
         prefs[THEME_ID_KEY] ?: "zamrud_light"
     }
     suspend fun setThemeId(id: String) = dataStore.edit { it[THEME_ID_KEY] = id }
+
+    // ── Reading Mode (v10) ────────────────────────────────────────────────────
+    /**
+     * Reader presentation style — Mushaf page renderer or per-juz
+     * Translation list. Defaults to [ReadingMode.MUSHAF] so every
+     * pre-v10 user sees the existing reader on first launch.
+     */
+    val readingMode: Flow<ReadingMode> = dataStore.data.map { prefs ->
+        ReadingMode.fromName(prefs[READING_MODE_KEY])
+    }
+    suspend fun setReadingMode(mode: ReadingMode) = dataStore.edit {
+        it[READING_MODE_KEY] = mode.name
+    }
+
+    /**
+     * Last-read position as `(surah, ayah)`. Defaults to (1, 1) — Al-Fatihah
+     * verse 1 — for first launches. Both readers maintain this on
+     * scroll/page-flip so "Continue Reading" always lands the user where
+     * they left off, regardless of which reader saved it.
+     */
+    val lastSurah: Flow<Int> = dataStore.data.map { it[LAST_SURAH_KEY] ?: 1 }
+    val lastAyah:  Flow<Int> = dataStore.data.map { it[LAST_AYAH_KEY] ?: 1 }
+    suspend fun setLastSurahAyah(surah: Int, ayah: Int) = dataStore.edit {
+        it[LAST_SURAH_KEY] = surah
+        it[LAST_AYAH_KEY]  = ayah
+    }
 
     // ── Session Limits ────────────────────────────────────────────────────────
     val newSessionLimit: Flow<Int> = dataStore.data.map { prefs ->
