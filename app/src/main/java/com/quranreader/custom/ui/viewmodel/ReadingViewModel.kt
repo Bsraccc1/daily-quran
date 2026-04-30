@@ -7,7 +7,6 @@ import com.quranreader.custom.data.local.AyahCoordinateDao
 import com.quranreader.custom.data.model.AyahCoordinate
 import com.quranreader.custom.data.model.HighlightedAyah
 import com.quranreader.custom.data.model.QuranPage
-import com.quranreader.custom.data.preferences.AutoSaveMode
 import com.quranreader.custom.data.preferences.ReaderOrientation
 import com.quranreader.custom.data.preferences.UserPreferences
 import com.quranreader.custom.data.repository.BookmarkRepository
@@ -15,14 +14,11 @@ import com.quranreader.custom.data.repository.QuranRepository
 import com.quranreader.custom.util.safeLaunch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class SessionState {
@@ -33,46 +29,34 @@ enum class SessionState {
 }
 
 /**
- * State of the auto-save indicator surfaced in the reader's
- * floating top-right chip. The reader shows a small pill that
- * mirrors whichever case is currently active so the user can see
- *   - **how long / how many pages** until their progress is committed,
- *   - **when** the commit fires (brief check-mark flash), and
- *   - **idle** the rest of the time once the previous save settled.
+ * State of the manual save chip surfaced in the reader's floating
+ * top-right pill. The reader shows the chip as a tappable
+ * `Save`-icon button by default; right after a successful manual
+ * save fires (user tapped it), the chip flips to a `CheckCircle`
+ * with a localised "Saved" / "Tersimpan" label for ≈ 1.5 s, then
+ * relaxes back to [Idle].
  *
- * The trigger is driven by [UserPreferences.autoSaveMode]:
- *  - [AutoSaveMode.BY_TIME] uses [UserPreferences.autoSavePageSeconds]
- *    as a dwell countdown, so [Counting.secondsLeft] is literally
- *    seconds and [Counting.byPages] is `false`.
- *  - [AutoSaveMode.BY_PAGES] uses [UserPreferences.autoSavePageCount]
- *    as a flip-count threshold; `secondsLeft` then carries
- *    *pages-until-save* and [Counting.byPages] is `true` so the chip
- *    can render a "3 pages" / "3 hlm" label instead of "3s".
- *
- * Both modes are surfaced in Settings → Reading so users with anxious
- * save habits can shorten it, batch readers can switch to BY_PAGES,
- * and battery-conscious users can lengthen either.
+ * Manual-save replaces the previous auto-save indicator (BY_TIME
+ * dwell + BY_PAGES counter) — both removed in v10.x because the
+ * auto debounce was racing real progress when the user navigated
+ * backwards inside a session, silently regressing `pagesRead`.
+ * The save now requires an explicit user tap, which makes the
+ * commit unambiguous and the bug class impossible.
  */
-sealed class AutoSaveTick {
-    /** No countdown in flight. The chip is hidden by the caller. */
-    object Idle : AutoSaveTick()
+sealed class SaveState {
+    /**
+     * Default chip — the user hasn't saved recently or the Saved
+     * flash has already faded. Chip renders as a tappable Save
+     * icon and stays interactive.
+     */
+    object Idle : SaveState()
 
     /**
-     * Countdown is running. [progress] climbs from 0 → 1 over the
-     * configured window so the chip can render a determinate ring;
-     * [secondsLeft] is the units-left number the chip renders next
-     * to the icon. [byPages] swaps the localised template the chip
-     * picks ("3s" vs "3 pages") so we don't need two parallel
-     * ticker types.
+     * Brief confirmation flash right after the user taps Save and
+     * the DataStore commit returns. Auto-relaxes to [Idle] after
+     * the flash window so the chip re-arms for the next save.
      */
-    data class Counting(
-        val progress: Float,
-        val secondsLeft: Int,
-        val byPages: Boolean = false,
-    ) : AutoSaveTick()
-
-    /** Brief flash right after a successful persist (≈ 1.5 s). */
-    object Saved : AutoSaveTick()
+    object Saved : SaveState()
 }
 
 @HiltViewModel
@@ -280,273 +264,68 @@ class ReadingViewModel @Inject constructor(
     private var lastTrackedPage: Int? = null
 
     /**
-     * User-configurable dwell window before the reader commits the
-     * page change to DataStore in [AutoSaveMode.BY_TIME]. Backed by
-     * [UserPreferences.autoSavePageSeconds] (default 3 s, range
-     * 1..60) and surfaced in Settings → Reading so users can dial it
-     * to their habits.
-     */
-    val autoSavePageSeconds: StateFlow<Int> = userPreferences.autoSavePageSeconds
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = 3,
-        )
-
-    /**
-     * Active auto-save trigger. BY_TIME (legacy default) debounces
-     * persistence on dwell time; BY_PAGES commits every Nth page
-     * flip regardless of dwell. [autoSaveTick] and the persistence
-     * collector both pivot on this so the chip and the actual save
-     * stay in lock-step with whatever the user picked in Settings.
-     */
-    val autoSaveMode: StateFlow<AutoSaveMode> = userPreferences.autoSaveMode
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = AutoSaveMode.BY_TIME,
-        )
-
-    /**
-     * Page-count threshold for [AutoSaveMode.BY_PAGES]. Range 1..50
-     * enforced upstream in [UserPreferences].
-     */
-    val autoSavePageCount: StateFlow<Int> = userPreferences.autoSavePageCount
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = 3,
-        )
-
-    /**
-     * Wall-clock millis of the most recent [setCurrentPage] call.
-     * Drives [autoSaveTick] so the chip's countdown re-syncs every
-     * time the user lands on a new page — even mid-saved-flash.
-     */
-    private val pageChangeTimeMs = MutableStateFlow(0L)
-
-    /**
-     * How many distinct page flips the user has clocked since the
-     * last successful persist. Reset to 0 inside the BY_PAGES
-     * collector the moment a save fires. Drives the BY_PAGES tick
-     * label ("in 2 pages…") so the user can see how close they are
-     * to the next commit.
-     */
-    private val _pagesSinceLastSave = MutableStateFlow(0)
-
-    /**
-     * Wall-clock millis of the most recent successful persist.
-     * Drives the ≈ 1.5 s "Saved" flash in both modes — the
-     * BY_TIME ticker derives this implicitly from `pageChangeTimeMs +
-     * totalMs`, but BY_PAGES needs an explicit signal because its
-     * commit is event-driven (page count threshold), not time-based.
-     */
-    private val _lastSaveTimeMs = MutableStateFlow(0L)
-
-    /**
-     * Live UI state for the auto-save indicator. Mode-aware:
-     *  - BY_TIME: counts down from `autoSavePageSeconds` to 0,
-     *    flashes Saved at the bottom of the timer, then goes Idle.
-     *  - BY_PAGES: shows a "X pages until save" countdown for ~ 2 s
-     *    after every flip, flashes Saved when the threshold is hit,
-     *    then goes Idle.
+     * Live UI state for the manual save chip. Flips to
+     * [SaveState.Saved] for [SAVED_FLASH_MS] right after the user
+     * taps Save and the DataStore commit returns, then back to
+     * [SaveState.Idle].
      *
-     * Both inner flows self-terminate (return from `flow { }`) once
-     * Idle is reached so we don't burn CPU once the user has been
-     * parked on the same page for a while.
+     * Driven exclusively by [saveSessionProgress] — there is no
+     * background timer feeding it, which is the whole point of the
+     * manual-save redesign: the chip can never claim a save fired
+     * unless the user actually triggered one.
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val autoSaveTick: StateFlow<AutoSaveTick> = combine(
-        autoSaveMode,
-        pageChangeTimeMs,
-    ) { mode, changedAt -> mode to changedAt }
-        .flatMapLatest { (mode, changedAt) ->
-            if (changedAt == 0L) {
-                flowOf<AutoSaveTick>(AutoSaveTick.Idle)
-            } else when (mode) {
-                AutoSaveMode.BY_TIME -> byTimeTickerFlow(changedAt)
-                AutoSaveMode.BY_PAGES -> byPagesTickerFlow(changedAt)
-            }
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = AutoSaveTick.Idle,
-        )
+    private val _saveState = MutableStateFlow<SaveState>(SaveState.Idle)
+    val saveState: StateFlow<SaveState> = _saveState.asStateFlow()
 
     /**
-     * Time-based ticker. The explicit `<AutoSaveTick>` type
-     * parameter on `flow { }` is what keeps the inferred
-     * FlowCollector at the sealed parent — without it Kotlin pins
-     * the flow to whichever subtype the first `emit` uses and
-     * rejects the later siblings.
-     */
-    private fun byTimeTickerFlow(changedAt: Long): Flow<AutoSaveTick> {
-        val totalMs = autoSavePageSeconds.value.toLong() * 1000L
-        val savedFlashMs = 1_500L
-        return flow<AutoSaveTick> {
-            while (true) {
-                val elapsed = System.currentTimeMillis() - changedAt
-                when {
-                    elapsed >= totalMs + savedFlashMs -> {
-                        emit(AutoSaveTick.Idle)
-                        return@flow
-                    }
-                    elapsed >= totalMs -> emit(AutoSaveTick.Saved)
-                    else -> {
-                        val progress = (elapsed.toFloat() / totalMs).coerceIn(0f, 1f)
-                        val secondsLeft = ((totalMs - elapsed + 999) / 1000).toInt()
-                        emit(AutoSaveTick.Counting(progress, secondsLeft, byPages = false))
-                    }
-                }
-                delay(100)
-            }
-        }
-    }
-
-    /**
-     * Page-count ticker. Runs for ~ 2 s after each flip to show the
-     * user how many pages remain until the next persist, then folds
-     * into the Saved flash if the persist landed inside that window
-     * (`_lastSaveTimeMs >= changedAt`), then Idle. The inner loop
-     * polls every 100 ms so the saved-flash transition is
-     * sub-second-perceptible without doing per-frame work.
-     */
-    private fun byPagesTickerFlow(changedAt: Long): Flow<AutoSaveTick> {
-        val countingWindowMs = 2_000L
-        val savedFlashMs = 1_500L
-        return flow<AutoSaveTick> {
-            while (true) {
-                val now = System.currentTimeMillis()
-                val sinceChanged = now - changedAt
-                val savedAt = _lastSaveTimeMs.value
-                val sinceSaved = now - savedAt
-                val savedActive = savedAt > 0L && savedAt >= changedAt && sinceSaved < savedFlashMs
-                when {
-                    savedActive -> emit(AutoSaveTick.Saved)
-                    sinceChanged < countingWindowMs -> {
-                        val threshold = autoSavePageCount.value.coerceAtLeast(1)
-                        val count = _pagesSinceLastSave.value.coerceIn(0, threshold)
-                        // `pagesUntilSave == 0` means the threshold
-                        // was hit by *this* flip but the persist
-                        // hasn't landed yet — we still want to show
-                        // a counting pill (not Idle) so there's no
-                        // visual gap before the Saved flash.
-                        val pagesUntilSave = (threshold - count).coerceAtLeast(0)
-                        val progress = (count.toFloat() / threshold).coerceIn(0f, 1f)
-                        emit(
-                            AutoSaveTick.Counting(
-                                progress = progress,
-                                secondsLeft = pagesUntilSave,
-                                byPages = true,
-                            )
-                        )
-                    }
-                    else -> {
-                        emit(AutoSaveTick.Idle)
-                        return@flow
-                    }
-                }
-                delay(100)
-            }
-        }
-    }
-
-    init {
-        // Mode-aware persistence collector. `collectLatest` on
-        // [autoSaveMode] cancels the previous inner collector the
-        // moment the user flips the picker, so switching modes mid-
-        // session takes effect on the very next page flip without
-        // any process restart.
-        //
-        // BY_TIME: classic dwell-debounced collector — same shape as
-        // before. Wrapping the inner debounce in
-        // `flatMapLatest(autoSavePageSeconds)` lets the user shorten
-        // / lengthen the timer mid-stream too.
-        //
-        // BY_PAGES: counts each distinct page change (skip the
-        // initial _currentPage emission via `drop(1)` so opening the
-        // reader on page 50 doesn't pre-charge the counter); fires
-        // [persistSessionProgress] when the threshold is met,
-        // resets the counter, and flips [_lastSaveTimeMs] so the
-        // tick UI flashes Saved.
-        @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-        viewModelScope.launch {
-            autoSaveMode.collectLatest { mode ->
-                when (mode) {
-                    AutoSaveMode.BY_TIME -> {
-                        autoSavePageSeconds
-                            .flatMapLatest { seconds ->
-                                _currentPage
-                                    .debounce(seconds.toLong() * 1000L)
-                                    .distinctUntilChanged()
-                            }
-                            .collect { page ->
-                                persistSessionProgress(page)
-                                _lastSaveTimeMs.value = System.currentTimeMillis()
-                                _pagesSinceLastSave.value = 0
-                            }
-                    }
-                    AutoSaveMode.BY_PAGES -> {
-                        // Reset the counter whenever the user enters
-                        // BY_PAGES mode — there's no point carrying a
-                        // half-counted run from a previous mode
-                        // change into the new threshold.
-                        _pagesSinceLastSave.value = 0
-                        // `_currentPage` is already a StateFlow which
-                        // dedups by value, so no `distinctUntilChanged`
-                        // needed (Kotlin 2.0 flagged the redundant call
-                        // as an error). `drop(1)` skips the initial
-                        // value emission so opening the reader on page
-                        // 50 doesn't pre-charge the counter.
-                        _currentPage
-                            .drop(1)
-                            .collect { page ->
-                                val threshold = autoSavePageCount.value.coerceAtLeast(1)
-                                val newCount = _pagesSinceLastSave.value + 1
-                                if (newCount >= threshold) {
-                                    persistSessionProgress(page)
-                                    _lastSaveTimeMs.value = System.currentTimeMillis()
-                                    _pagesSinceLastSave.value = 0
-                                    // Intentionally NOT re-poking
-                                    // [pageChangeTimeMs] here — the
-                                    // tick flow's `savedActive`
-                                    // check requires
-                                    // `_lastSaveTimeMs >= changedAt`,
-                                    // and `setCurrentPage` already
-                                    // bumped `changedAt` to the page
-                                    // flip's timestamp. Re-poking
-                                    // would push `changedAt` past
-                                    // the just-recorded save and
-                                    // suppress the Saved flash. The
-                                    // inner ticker re-reads
-                                    // `_lastSaveTimeMs.value` every
-                                    // 100 ms so the flash appears in
-                                    // the next iteration.
-                                } else {
-                                    _pagesSinceLastSave.value = newCount
-                                }
-                            }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Persist the active session's pagesRead. Capped at the session's
-     * own targetPages so an over-shoot during the auto-stop frame
-     * doesn't poison the resume math (which subtracts 1 from
-     * pagesRead to land the user back on the *last* page they read,
-     * not the page after).
+     * Persist the active session's pagesRead. The actual monotonic +
+     * cap rules live in [UserPreferences.updateSessionProgress] /
+     * [SessionProgressMath], so this function only needs to compute
+     * the candidate raw value and forward it.
      */
     private suspend fun persistSessionProgress(page: Int) {
         val activeSessionId = userPreferences.activeSessionId.first() ?: return
         val sessions = userPreferences.sessions.first()
         val activeSession = sessions.find { it.id == activeSessionId } ?: return
         val raw = (page - activeSession.startPage + 1).coerceAtLeast(0)
-        val capped = raw.coerceAtMost(activeSession.targetPages.coerceAtLeast(1))
-        userPreferences.updateSessionProgress(capped)
+        userPreferences.updateSessionProgress(raw)
+    }
+
+    /**
+     * **Manual save** — commit the current page's session progress
+     * to DataStore. Called from the reader's tappable Save chip;
+     * this is the **only** path that updates `pagesRead`.
+     *
+     * Behaviour:
+     *  1. Read [_currentPage] synchronously (so a concurrent flip
+     *     during the click can't race us).
+     *  2. Launch on [NonCancellable] so the DataStore edit
+     *     completes even if the user back-navigates mid-write.
+     *  3. Persist `pagesRead` (monotonic — see
+     *     [com.quranreader.custom.data.preferences.SessionProgressMath])
+     *     and `lastPage` so the Dashboard's "Continue Reading"
+     *     stays in sync with the just-committed mark.
+     *  4. Flip [saveState] to `Saved` for [SAVED_FLASH_MS] then
+     *     back to `Idle` so the chip re-arms.
+     *
+     * Idempotent — tapping twice in a row at the same page is fine;
+     * the second commit is a no-op at the DataStore layer
+     * (watermark unchanged) and the chip just re-flashes Saved.
+     */
+    fun saveSessionProgress() {
+        val page = _currentPage.value
+        viewModelScope.launch(NonCancellable) {
+            persistSessionProgress(page)
+            userPreferences.setLastPage(page)
+            _saveState.value = SaveState.Saved
+            delay(SAVED_FLASH_MS)
+            _saveState.value = SaveState.Idle
+        }
+    }
+
+    private companion object {
+        /** How long the chip flashes "Saved" after a manual commit. */
+        const val SAVED_FLASH_MS = 1_500L
     }
 
     fun clearError() {
@@ -554,16 +333,21 @@ class ReadingViewModel @Inject constructor(
     }
 
     /**
-     * Called when pager settles on a new page. Handles auto-session tracking.
+     * Called when the pager settles on a new page. Updates the
+     * in-memory current-page flow, persists the `lastPage` pointer
+     * (so cold-start "Continue Reading" remembers where the user
+     * was), and bumps the daily-pages-read statistic.
+     *
+     * Crucially, this **does not** persist session `pagesRead` —
+     * that's reserved for [saveSessionProgress] (manual Save
+     * button) so navigating around inside the reader can't
+     * silently rewrite the session's high-water mark.
      */
     fun setCurrentPage(page: Int) {
         safeLaunch(
             onError = { _errorMessage.value = "Failed to save page progress" }
         ) {
             _currentPage.value = page
-            // Reset the slide-down panel's auto-save countdown chip
-            // so it re-runs from 0→autoSavePageSeconds for the new page.
-            pageChangeTimeMs.value = System.currentTimeMillis()
             userPreferences.setLastPage(page)
 
             // Track page change for statistics
@@ -572,10 +356,10 @@ class ReadingViewModel @Inject constructor(
                 lastTrackedPage = page
             }
 
-            // Multi-session `pagesRead` is persisted on a 5-second
-            // debounce by the [init] collector so quick swipes don't
-            // inflate progress. The collector uses the same
-            // [_currentPage] flow we just updated above.
+            // Session `pagesRead` is committed only when the user
+            // taps the manual Save chip — see [saveSessionProgress].
+            // This is the deliberate behaviour change in v10.x: no
+            // background debounce can ever overwrite the user's mark.
 
             // ── Auto-session: check limit ──
             // The session covers pages [startPage..endPage] inclusive
@@ -718,7 +502,23 @@ class ReadingViewModel @Inject constructor(
         }
     }
 
-    /** "Close" — terminate session */
+    /**
+     * "Close" — terminate the active session.
+     *
+     * Two-phase: in-memory state is cleared synchronously so the
+     * reader's chrome (completion sheet, progress chip) hides on
+     * the next frame, then the DataStore mutations are launched on
+     * [viewModelScope] so the multi-session list, active-session id,
+     * and legacy single-session flag all reflect the close after
+     * the next DataStore commit.
+     *
+     * Pre-fix bug: previously this only cleared the in-memory
+     * StateFlows, so on the next app launch the Dashboard still
+     * read `activeSessionId != null` and `isActive=true` from
+     * DataStore — "Continue Reading" jumped back into the closed
+     * session, exactly the "kereset ga nyimpan" symptom the user
+     * reported.
+     */
     fun closeSession() {
         _showSessionCompleteSheet.value = false
         _sessionState.value = SessionState.IDLE
@@ -726,6 +526,26 @@ class ReadingViewModel @Inject constructor(
         _sessionStartPage.value = null
         _sessionEndPage.value = null
         _hasNavigatedToMushaf.value = false
+        viewModelScope.launch {
+            // Mark the active multi-session entry as completed (kept
+            // visible in the Session tab as a finished card) and
+            // detach the active-id pointer so a fresh session can
+            // arm without colliding with the now-closed one.
+            val activeId = userPreferences.activeSessionId.first()
+            if (activeId != null) {
+                val sessions = userPreferences.sessions.first()
+                sessions.find { it.id == activeId }?.let { session ->
+                    userPreferences.updateSession(
+                        session.copy(isActive = false, isCompleted = true),
+                    )
+                }
+                userPreferences.setActiveSession(null)
+            }
+            // Drop the legacy single-session flag too so older code
+            // paths (HomeViewModel.isSessionActive, the limit math
+            // in setCurrentPage) match the new state.
+            userPreferences.endSession()
+        }
     }
 
     /** Cancel input and return to previous state */

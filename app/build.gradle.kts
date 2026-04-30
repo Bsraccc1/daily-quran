@@ -13,8 +13,8 @@ android {
         applicationId = "com.quranreader.custom"
         minSdk = 21
         targetSdk = 34
-        versionCode = 5
-        versionName = "9.0.0"
+        versionCode = 6
+        versionName = "9.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

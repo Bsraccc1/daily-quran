@@ -156,6 +156,7 @@ ui.xml
 tmp_ui_mapper.json
 screenshot_*.png
 screenshots/multi/
+debug-screenshots/
 
 # Python tooling cache used by tools/build_mushaf_pages.py
 tools/.cache/

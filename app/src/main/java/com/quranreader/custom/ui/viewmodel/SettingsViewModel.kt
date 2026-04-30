@@ -3,7 +3,6 @@ package com.quranreader.custom.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.quranreader.custom.data.memorization.MemorizationRepository
-import com.quranreader.custom.data.preferences.AutoSaveMode
 import com.quranreader.custom.data.preferences.DisplayMode
 import com.quranreader.custom.data.preferences.ReadingMode
 import com.quranreader.custom.data.preferences.UserPreferences
@@ -100,60 +99,10 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Auto-save dwell window in seconds (1..60). The reader's
-     * slide-down panel renders a countdown chip backed by this value
-     * and persists session progress once the timer elapses, so users
-     * can balance "save aggressively" against "minimize datastore
-     * writes" without us guessing.
-     */
-    val autoSavePageSeconds = userPreferences.autoSavePageSeconds.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 3
-    )
-
-    fun setAutoSavePageSeconds(seconds: Int) {
-        viewModelScope.launch {
-            userPreferences.setAutoSavePageSeconds(seconds)
-        }
-    }
-
-    /**
-     * Active auto-save trigger ([AutoSaveMode.BY_TIME] vs
-     * [AutoSaveMode.BY_PAGES]). Drives both the reader's persistence
-     * collector and the auto-save chip's label format. Defaults to
-     * BY_TIME for legacy parity with users who never open the picker.
-     */
-    val autoSaveMode = userPreferences.autoSaveMode.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = AutoSaveMode.BY_TIME,
-    )
-
-    fun setAutoSaveMode(mode: AutoSaveMode) {
-        viewModelScope.launch {
-            userPreferences.setAutoSaveMode(mode)
-        }
-    }
-
-    /**
-     * Page-count threshold that arms [AutoSaveMode.BY_PAGES]. Range
-     * 1..50 enforced on the setter so a misclick can't disable saves
-     * entirely. The reader binds to this so changing the value mid-
-     * session takes effect on the very next page flip — no restart.
-     */
-    val autoSavePageCount = userPreferences.autoSavePageCount.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 3,
-    )
-
-    fun setAutoSavePageCount(pages: Int) {
-        viewModelScope.launch {
-            userPreferences.setAutoSavePageCount(pages)
-        }
-    }
+    // Auto-save settings retired in v10.x — the reader now exposes a
+    // tappable manual Save chip (see ReadingViewModel.saveState +
+    // saveSessionProgress) so there are no auto-save-mode / dwell /
+    // page-count knobs to surface in Settings any more.
 
     fun setDisplayMode(mode: DisplayMode) {
         viewModelScope.launch {

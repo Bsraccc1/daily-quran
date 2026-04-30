@@ -215,24 +215,12 @@
     <string name="dashboard_pages_range_summary">Halaman %1$d–%2$d (%3$d halaman)</string>
     <string name="dashboard_juz_label">Nomor Juz (1–30)</string>
 
-    <!-- Indikator auto-simpan pembaca (chip panel slide-down) -->
-    <string name="mushaf_autosave_counting">%1$d dtk</string>
-    <string name="mushaf_autosave_counting_pages">%1$d hlm</string>
-    <string name="mushaf_autosave_saved">Tersimpan</string>
-    <string name="mushaf_autosave_idle">Tersimpan</string>
-    <string name="mushaf_autosave_content_description">Indikator auto-simpan</string>
-    <!-- Pengaturan → Baca: auto-simpan -->
-    <string name="settings_autosave_title">Auto-simpan</string>
-    <string name="settings_autosave_description">Kapan pembaca menyimpan progresmu. Pilih timer dwell (menyimpan setelah kamu diam di satu halaman) atau ambang jumlah halaman (menyimpan setiap N flip).</string>
-    <string name="settings_autosave_mode_by_time">Berdasar waktu</string>
-    <string name="settings_autosave_mode_by_pages">Berdasar halaman</string>
-    <string name="settings_autosave_seconds_label">Detik (1-60)</string>
-    <string name="settings_autosave_seconds_current">Saat ini: %1$d dtk</string>
-    <string name="settings_autosave_pages_label">Halaman (1-50)</string>
-    <string name="settings_autosave_pages_current">Saat ini: setiap %1$d halaman</string>
-    <!-- Alias lama agar referensi yang masih memakai kunci lama tetap resolve. -->
-    <string name="settings_autosave_label">@string/settings_autosave_seconds_label</string>
-    <string name="settings_autosave_current">@string/settings_autosave_seconds_current</string>
+    <!-- Tombol simpan manual pembaca (chip floating + panel slide-down).
+         Menggantikan indikator auto-simpan di v10.x — simpan sekarang
+         butuh tap eksplisit dari pengguna sehingga navigasi mundur
+         tidak akan pernah diam-diam mengembalikan progres sesi. -->
+    <string name="mushaf_save_action">Simpan</string>
+    <string name="mushaf_save_saved">Tersimpan</string>
 
     <!-- Search → Cari Ayat -->
     <string name="search_chip_ayah">Ayat</string>

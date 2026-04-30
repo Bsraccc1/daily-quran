@@ -116,7 +116,7 @@ import kotlinx.coroutines.launch
 import com.quranreader.custom.data.QuranInfo
 import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_HEIGHT_PX
 import com.quranreader.custom.data.local.ayahinfo.AyahInfoDatabase.Companion.IMAGE_WIDTH_PX
-import com.quranreader.custom.ui.viewmodel.AutoSaveTick
+import com.quranreader.custom.ui.viewmodel.SaveState
 import com.quranreader.custom.data.preferences.ReaderOrientation
 import com.quranreader.custom.ui.components.TranslationEditionsDialog
 import com.quranreader.custom.ui.components.TranslationPanel
@@ -155,7 +155,7 @@ fun MushafReaderScreen(
     val pagesReadInSession by readingViewModel.pagesReadInSession.collectAsStateWithLifecycle()
     val sessionTargetPages by readingViewModel.sessionTargetPages.collectAsStateWithLifecycle()
     val newSessionLimit by readingViewModel.newSessionLimit.collectAsStateWithLifecycle()
-    val autoSaveTick by readingViewModel.autoSaveTick.collectAsStateWithLifecycle()
+    val saveState by readingViewModel.saveState.collectAsStateWithLifecycle()
 
     val audioState by audioViewModel.playbackState.collectAsStateWithLifecycle()
     val currentAudioAyah by audioViewModel.currentAyah.collectAsStateWithLifecycle()
@@ -381,7 +381,6 @@ fun MushafReaderScreen(
                 pageNumber = highlightedAyah?.page ?: currentPageNumber,
                 surahNumber = highlightedAyah?.surah ?: 1,
                 ayahNumber = highlightedAyah?.ayah ?: 1,
-                autoSaveTick = autoSaveTick,
                 onClose = { readingViewModel.clearHighlight() },
                 onNavigate = { showNavigateDialog = true },
             )
@@ -411,6 +410,8 @@ fun MushafReaderScreen(
                 readerOrientation = readerOrientation,
                 isLandscape = isLandscape,
                 landscapeZoom = landscapeZoom,
+                saveState = saveState,
+                onSaveClick = { readingViewModel.saveSessionProgress() },
                 onBack = onBack,
                 onBookmarkToggle = { readingViewModel.toggleAyahBookmark() },
                 onTranslateToggle = {
@@ -460,29 +461,13 @@ fun MushafReaderScreen(
                 .padding(bottom = if (panelsVisible) 104.dp else 16.dp),
         )
 
-        AnimatedVisibility(
-            visible = autoSaveTick !is AutoSaveTick.Idle,
-            enter = fadeIn(animationSpec = Motion.standard()) +
-                slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = Motion.emphasizedDecelerate(),
-                ),
-            exit = fadeOut(animationSpec = Motion.short()) +
-                slideOutVertically(
-                    targetOffsetY = { -it / 2 },
-                    animationSpec = Motion.emphasizedAccelerate(),
-                ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(
-                        WindowInsetsSides.Top + WindowInsetsSides.End,
-                    ),
-                )
-                .padding(top = 4.dp, end = 16.dp),
-        ) {
-            FloatingAutoSaveIndicator(state = autoSaveTick)
-        }
+        // Manual save lives only in the bottom slide-up action
+        // panel (see [BottomActionPanel]) — the previous always-
+        // visible top-right floating button overlapped the ayah
+        // text on dense Mushaf pages and the slide-down chip
+        // duplicated the action redundantly. Keeping it in just
+        // the bottom panel matches where the rest of the reader
+        // actions (bookmark, translate, audio, memorize) live.
     }
 
     if (showSessionCompleteSheet) {
@@ -556,7 +541,6 @@ private fun TopInfoPanel(
     pageNumber: Int,
     surahNumber: Int,
     ayahNumber: Int,
-    autoSaveTick: AutoSaveTick = AutoSaveTick.Idle,
     onClose: () -> Unit,
     onNavigate: () -> Unit,
 ) {
@@ -620,7 +604,6 @@ private fun TopInfoPanel(
                     InfoChipRow(
                         pageNumber = pageNumber,
                         juz = juz,
-                        autoSaveTick = autoSaveTick,
                     )
                 }
             }
@@ -635,7 +618,6 @@ private fun TopInfoPanel(
                     InfoChipRow(
                         pageNumber = pageNumber,
                         juz = juz,
-                        autoSaveTick = autoSaveTick,
                     )
                 }
             }
@@ -674,7 +656,6 @@ private fun TopInfoPanel(
 private fun InfoChipRow(
     pageNumber: Int,
     juz: Int,
-    autoSaveTick: AutoSaveTick,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ContextChip(
@@ -685,7 +666,6 @@ private fun InfoChipRow(
             icon = Icons.Default.Bookmark,
             label = stringResource(R.string.mushaf_juz_label, juz),
         )
-        AutoSaveChip(state = autoSaveTick)
     }
 }
 
@@ -720,124 +700,45 @@ private fun ContextChip(
     }
 }
 
+/**
+ * Manual-save action button rendered inside the reader's bottom
+ * slide-up [BottomActionPanel] alongside translate / audio /
+ * memorize / bookmark. This is the **only** UI surface the user
+ * can use to commit session progress — the previous always-
+ * visible floating chip was retired because it overlapped Mushaf
+ * ayah text, and the slide-down top-panel chip was a redundant
+ * duplicate.
+ *
+ * Visual state machine:
+ *  - [SaveState.Idle]: `Save` icon + neutral / on-surface tint,
+ *    same styling as every other [PanelIconButton] in the row
+ *    so it doesn't shout for attention.
+ *  - [SaveState.Saved]: `CheckCircle` icon + tertiary tint,
+ *    briefly (≈ 1.5 s) confirming the commit landed before
+ *    relaxing back to Idle so the row re-arms for the next save.
+ */
 @Composable
-private fun FloatingAutoSaveIndicator(state: AutoSaveTick) {
-    val isCounting = state is AutoSaveTick.Counting
-    val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
-    val label: String? = when (state) {
-        is AutoSaveTick.Counting -> stringResource(
-            if (state.byPages) R.string.mushaf_autosave_counting_pages
-            else R.string.mushaf_autosave_counting,
-            state.secondsLeft,
-        )
-        AutoSaveTick.Saved -> stringResource(R.string.mushaf_autosave_saved)
-        AutoSaveTick.Idle -> null
-    }
-    val accent = if (isCounting) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.tertiary
-
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        tonalElevation = 6.dp,
-        shadowElevation = 4.dp,
-        modifier = Modifier.widthIn(max = 160.dp),
+private fun SaveActionButton(
+    state: SaveState,
+    onClick: () -> Unit,
+) {
+    val saved = state is SaveState.Saved
+    val icon = if (saved) Icons.Default.CheckCircle else Icons.Default.Save
+    val tint = if (saved) MaterialTheme.colorScheme.tertiary
+    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+    val description = stringResource(
+        if (saved) R.string.mushaf_save_saved else R.string.mushaf_save_action,
+    )
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (state is AutoSaveTick.Counting) {
-                    CircularProgressIndicator(
-                        progress = { state.progress },
-                        modifier = Modifier.size(14.dp),
-                        color = accent,
-                        strokeWidth = 1.5.dp,
-                        trackColor = accent.copy(alpha = 0.25f),
-                    )
-                }
-                Icon(
-                    imageVector = icon,
-                    contentDescription = stringResource(
-                        R.string.mushaf_autosave_content_description,
-                    ),
-                    modifier = Modifier.size(if (isCounting) 9.dp else 14.dp),
-                    tint = accent,
-                )
-            }
-            if (label != null) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AutoSaveChip(state: AutoSaveTick) {
-    val isCounting = state is AutoSaveTick.Counting
-    val icon = if (isCounting) Icons.Default.Save else Icons.Default.CheckCircle
-    val label = when (state) {
-        is AutoSaveTick.Counting -> stringResource(
-            if (state.byPages) R.string.mushaf_autosave_counting_pages
-            else R.string.mushaf_autosave_counting,
-            state.secondsLeft,
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = tint,
+            modifier = Modifier.size(22.dp),
         )
-        AutoSaveTick.Saved -> stringResource(R.string.mushaf_autosave_saved)
-        AutoSaveTick.Idle -> stringResource(R.string.mushaf_autosave_idle)
-    }
-    val accent = if (isCounting) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.tertiary
-
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = accent.copy(alpha = 0.12f),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (state is AutoSaveTick.Counting) {
-                    CircularProgressIndicator(
-                        progress = { state.progress },
-                        modifier = Modifier.size(14.dp),
-                        color = accent,
-                        strokeWidth = 1.5.dp,
-                        trackColor = accent.copy(alpha = 0.25f),
-                    )
-                }
-                Icon(
-                    imageVector = icon,
-                    contentDescription = stringResource(
-                        R.string.mushaf_autosave_content_description,
-                    ),
-                    modifier = Modifier.size(if (isCounting) 9.dp else 14.dp),
-                    tint = accent,
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
 }
 
@@ -850,6 +751,8 @@ private fun BottomActionPanel(
     readerOrientation: ReaderOrientation,
     isLandscape: Boolean = false,
     landscapeZoom: Float = 1f,
+    saveState: SaveState = SaveState.Idle,
+    onSaveClick: () -> Unit = {},
     onBack: () -> Unit,
     onBookmarkToggle: () -> Unit,
     onTranslateToggle: () -> Unit,
@@ -960,6 +863,10 @@ private fun BottomActionPanel(
                 BookmarkIconButton(
                     isBookmarked = isBookmarked,
                     onClick = onBookmarkToggle,
+                )
+                SaveActionButton(
+                    state = saveState,
+                    onClick = onSaveClick,
                 )
             }
         }

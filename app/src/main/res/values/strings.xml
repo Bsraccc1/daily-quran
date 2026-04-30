@@ -215,26 +215,12 @@
     <string name="dashboard_pages_range_summary">Pages %1$d–%2$d (%3$d pages)</string>
     <string name="dashboard_juz_label">Juz number (1–30)</string>
 
-    <!-- Reader Auto-save Indicator (slide-down panel chip) -->
-    <string name="mushaf_autosave_counting">%1$ds</string>
-    <string name="mushaf_autosave_counting_pages">%1$d pages</string>
-    <string name="mushaf_autosave_saved">Saved</string>
-    <string name="mushaf_autosave_idle">Saved</string>
-    <string name="mushaf_autosave_content_description">Auto-save indicator</string>
-    <!-- Settings → Reading: auto-save delay -->
-    <string name="settings_autosave_title">Auto-save</string>
-    <string name="settings_autosave_description">When the reader should commit your progress. Pick a dwell timer (saves after you stay on a page) or a page-count threshold (saves every N flips).</string>
-    <string name="settings_autosave_mode_by_time">By time</string>
-    <string name="settings_autosave_mode_by_pages">By pages</string>
-    <string name="settings_autosave_seconds_label">Seconds (1-60)</string>
-    <string name="settings_autosave_seconds_current">Current: %1$ds</string>
-    <string name="settings_autosave_pages_label">Pages (1-50)</string>
-    <string name="settings_autosave_pages_current">Current: every %1$d pages</string>
-    <!-- Legacy aliases kept so any external string lookup that grabs the old
-         keys still resolves — settings_autosave_label / settings_autosave_current
-         used to drive the seconds field. -->
-    <string name="settings_autosave_label">@string/settings_autosave_seconds_label</string>
-    <string name="settings_autosave_current">@string/settings_autosave_seconds_current</string>
+    <!-- Reader manual Save chip (floating top-right + slide-down panel).
+         Replaced the previous auto-save indicator in v10.x — saves
+         now require an explicit user tap so backward navigation
+         can never silently regress session progress. -->
+    <string name="mushaf_save_action">Save</string>
+    <string name="mushaf_save_saved">Saved</string>
 
     <!-- Search → Cari Ayat (verse lookup) -->
     <string name="search_chip_ayah">Verse</string>
