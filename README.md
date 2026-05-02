@@ -2,8 +2,8 @@
 
 Android Quran reader built with Jetpack Compose and Material 3. Ships all 604 Mushaf Madinah pages, an offline ayah-coordinate database for tap-to-highlight, twelve reciters for streaming or cached playback, and the full quran.com translations catalogue.
 
-[![Android CI](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-debug.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-debug.yml)
-[![Release](https://github.com/Bsraccc1/daily-quran/actions/workflows/android-release.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/releases/latest)
+[![Build APK](https://github.com/Bsraccc1/daily-quran/actions/workflows/build.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/actions/workflows/build.yml)
+[![Release](https://github.com/Bsraccc1/daily-quran/actions/workflows/release.yml/badge.svg)](https://github.com/Bsraccc1/daily-quran/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg)](https://www.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-7F52FF.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
@@ -144,6 +144,8 @@ tools/
 
 Requirements: Android SDK 34, JDK 17, Gradle wrapper bundled.
 
+### Local Build
+
 ```bash
 # Debug APK
 ./gradlew assembleDebug
@@ -163,6 +165,53 @@ Common dev commands:
 ./gradlew test                   # JVM unit tests
 ./gradlew connectedAndroidTest   # instrumented tests on a device
 ```
+
+### CI/CD & Releases
+
+The project uses GitHub Actions for automated builds and releases:
+
+- **Continuous Build**: Every push to `main` or `develop` triggers lint, tests, and debug APK build
+- **Automated Releases**: Pushing a version tag (e.g., `v9.3.0`) automatically builds and uploads APKs to GitHub Releases
+
+#### Creating a Release
+
+**Option 1: Using Script (Recommended)**
+
+Windows (PowerShell):
+```powershell
+.\scripts\create-release.ps1
+```
+
+Linux/Mac (Bash):
+```bash
+chmod +x scripts/create-release.sh
+./scripts/create-release.sh
+```
+
+The script will:
+1. Prompt for new version number
+2. Update `versionName` and `versionCode` in `build.gradle.kts`
+3. Commit and push changes
+4. Create and push version tag
+5. Trigger GitHub Actions to build and release
+
+**Option 2: Manual**
+
+```bash
+# 1. Update version in app/build.gradle.kts
+# 2. Commit changes
+git add app/build.gradle.kts
+git commit -m "Bump version to 9.3.0"
+git push origin main
+
+# 3. Create and push tag
+git tag -a v9.3.0 -m "Release version 9.3.0"
+git push origin v9.3.0
+```
+
+GitHub Actions will automatically build and upload APKs to: https://github.com/Bsraccc1/daily-quran/releases
+
+See [scripts/README.md](scripts/README.md) for detailed documentation.
 
 The mushaf page assets and `ayahinfo.db` are committed to the repo, so a fresh clone builds and runs without any extra download step.
 
