@@ -99,6 +99,11 @@ class AudioViewModel @Inject constructor(
         audioService?.playPage(page)
     }
 
+    fun playRange(surah: Int, fromAyah: Int, toAyah: Int, repeat: Int = 0) {
+        audioService?.setReciter(_currentReciter.value)
+        audioService?.playRange(surah, fromAyah, toAyah, repeat)
+    }
+
     fun togglePlayPause() {
         audioService?.let {
             if (it.isPlaying()) it.pause() else it.play()

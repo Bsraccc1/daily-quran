@@ -183,8 +183,25 @@ class AudioService : LifecycleService() {
             else player.repeatMode = Player.REPEAT_MODE_OFF
             player.prepare()
             player.play()
+
+            // v3.0 REQ-005: attach HighlightSyncEngine for ayah-level visual sync
+            highlightSyncEngine.setMediaItemMapping(
+                currentPageAyahs.map { (s, a) -> AyahKey(s, a) }
+            )
+            syncScope.launch {
+                highlightSyncEngine.attach(
+                    scope = syncScope,
+                    player = player,
+                    reciterId = currentReciter.id,
+                    surahNumber = surah
+                )
+            }
         }
 
+        if (currentPageAyahs.isNotEmpty()) {
+            val (s, a) = currentPageAyahs[0]
+            _currentAyah.value = AyahInfo(s, a)
+        }
         _playbackState.value = PlaybackState.Playing
     }
 
